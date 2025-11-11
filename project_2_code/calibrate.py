@@ -10,7 +10,9 @@ class Calibrator:
 
     def __init__(self):
         # ballancer settings
-        self.BALANCER_DIAMETER = 0.15 # Known diameter length in meters
+        self.circle_center = 0.15 # Known diameter length in meters
+        self.circle_radius = None
+        self.drawing_circle = False
 
         # camera settings
         self.CAMERA_INDEX = 0 # Default camera index
@@ -59,15 +61,31 @@ class Calibrator:
             self.servo.write(bytes(data))
 
     def mouse_event(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            if self.phase == "color":
-                self.sample_color(x,y)
-            elif self.phase == "geometry" and len(self.endpoints) < 2:
+        if self.phase == "color":
+            if event == cv2.EVENT_LBUTTONDOWN:
+                self.sample_color(x, y)
+        elif self.phase == "circle":
+            if event == cv2.EVENT_LBUTTONDOWN:
+                # Start drawing
+                self.circle_center = (x, y)
+                self.drawing_circle = True
+
+            elif event == cv2.EVENT_MOUSEMOVE and self.drawing_circle:
+                # Update radius dynamically
+                dx = x - self.circle_center[0]
+                dy = y - self.circle_center[1]
+                self.circle_radius = int(math.sqrt(dx**2 + dy**2))
+
+            elif event == cv2.EVENT_LBUTTONUP:
+                # Stop drawing
+                self.drawing_circle = False
+
+        elif self.phase == "geometry":
+            if event == cv2.EVENT_LBUTTONDOWN and len(self.endpoints) < 2:
                 self.endpoints.append((x, y))
                 print(f"[GEO] Endpoint {len(self.endpoints)} selected")
                 if len(self.endpoints) == 2:
                     self.calculate_geometry()
-
 
     def sample_color(self, x, y):
         if self.current_frame is None:
@@ -212,6 +230,7 @@ class Calibrator:
         # Phase-specific instruction text
         phase_text = {
             "color": "Click on ball to sample colors. Press 'c' when done.",
+            "circle": "Draw and size circle around platform. Press 'n' when done.",
             "geometry": "Click on beam endpoints (2 points)",
             "limits": "Press 'l' to find limits automatically",
             "complete": "Calibration complete! Press 's' to save"
@@ -227,6 +246,11 @@ class Calibrator:
         if self.hsv_samples:
             cv2.putText(overlay, f"Color samples: {len(self.hsv_samples)}", (10, 90),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+            
+        if self.phase == "circle" and self.circle_center:
+            cv2.circle(overlay, self.circle_center, self.circle_radius, (0, 255, 0), 2)
+            cv2.putText(overlay, "Adjust circle to match real boundary, press 'n' when done",
+                        (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         
         # Show geometry calibration points
         for i, endpoint in enumerate(self.endpoints):
@@ -318,8 +342,17 @@ class Calibrator:
             elif key == ord('c') and self.phase == "color":
                 # Complete color calibration phase
                 if self.hsv_samples:
+                    self.phase = "circle"
+                    print("[INFO] Color calibration complete. Draw and resize circle over the platform.")
+                    
+                    #self.phase = "geometry"
+                    #print("[INFO] Color calibration complete. Click on beam endpoints.")
+            elif key == ord('n') and self.phase == "circle":
+                if self.circle_center and self.circle_radius > 0:
+                    self.pixel_to_meter_ratio = (self.BALANCER_DIAMETER / 2) / self.circle_radius
+                    print(f"[CIRCLE] Pixel-to-meter ratio: {self.pixel_to_meter_ratio:.6f}")
                     self.phase = "geometry"
-                    print("[INFO] Color calibration complete. Click on beam endpoints.")
+                    print("[INFO] Circle calibration complete. Click on beam endpoints.")
             elif key == ord('l') and self.phase == "limits":
                 # Start automatic limit finding
                 self.find_limits_automatically()
