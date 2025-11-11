@@ -10,32 +10,34 @@ class Calibrator:
 
     def __init__(self):
         # ballancer settings
-        self.BALANCER_DIAMETER = 0.15
+        self.BALANCER_DIAMETER = 0.15 # Known diameter length in meters
 
         # camera settings
-        self.CAMERA_INDEX = 0
-        self.FRAME_WIDTH = 640
-        self.FRAME_HEIGHT = 480
+        self.CAMERA_INDEX = 0 # Default camera index
+        self.FRAME_WIDTH = 640 # Default frame width
+        self.FRAME_HEIGHT = 480 # Default frame height
 
         # state calibration settings
-        self.current_frame = None
-        self.phase = "colour"
+        self.current_frame = None # Current camera frame
+        self.phase = 'color' # Calibration phase
 
-        # colour calibration settings
-        self.hsv_samples = []
-        self.hsv_lower = None
-        self.hsv_upper = None
+        # color calibration settings
+        self.hsv_samples = [] # Collected HSV samples
+        self.hsv_lower = None # Lower HSV bounds
+        self.hsv_upper = None # Upper HSV bounds
 
         # geometric calibration settings
-        self.endpoints = []
-        self.pixels_per_meter = None
+        self.endpoints = [] # Selected beam endpoints
+        self.pixels_per_meter = None # Pixel-to-meter ratio
 
         # hardware settings
-        self.servo = None
-        self.servo_port = "COM3"
-        self.servo_baudrate = 9600
-        self.neutral_angle = 70
+        self.servo = None # Servo connection
+        self.servo_port = "COM3" # Servo port
+        self.servo_baudrate = 9600 # Servo baudrate
+        self.neutral_angle = 65 # Neutral servo angle
 
+        self.position_max = None # Max position limit
+        self.position_min = None # Min position limit
 
     def connect_servo(self):
         try:
@@ -58,16 +60,16 @@ class Calibrator:
 
     def mouse_event(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
-            if self.phase == "colour":
-                self.sample_colour(x,y)
-            elif self.phase == "geometry" and len(self.endpoints) < 6:
+            if self.phase == "color":
+                self.sample_color(x,y)
+            elif self.phase == "geometry" and len(self.endpoints) < 2:
                 self.endpoints.append((x, y))
                 print(f"[GEO] Endpoint {len(self.endpoints)} selected")
-                if len(self.endpoints) == 6:
+                if len(self.endpoints) == 2:
                     self.calculate_geometry()
 
 
-    def sample_colour(self, x, y):
+    def sample_color(self, x, y):
         if self.current_frame is None:
                 return
             
@@ -110,12 +112,10 @@ class Calibrator:
 
     def calculate_geometry(self):
         """Calculate pixel-to-meter conversion ratio from beam endpoint coordinates."""
-        p1, p2, p3, p4, p5, p6 = self.endpoints
+        p1, p2 = self.endpoints
         
         # Calculate pixel distance between beam endpoints
         distance1 = math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
-        distance2 = math.sqrt((p4[0] - p3[0])**2 + (p4[1] - p3[1])**2)
-        distance3 = math.sqrt((p6[0] - p5[0])**2 + (p6[1] - p5[1])**2)
 
         # Convert to meters using known balancer diameter
         self.pixel_to_meter_ratio = self.BALANCER_DIAMETER / distance1
@@ -159,6 +159,13 @@ class Calibrator:
         
         return meters_offset
 
+    def find_limits_automatically(self):
+        # Estimate limits without servo if connection failed
+        self.position_min = -self.BEAM_LENGTH_M / 2
+        self.position_max = self.BEAM_LENGTH_M / 2
+        print("[LIMITS] Estimated without servo")
+        return
+
 
     def save_config(self):
         """Save all calibration results to config.json file."""
@@ -166,9 +173,9 @@ class Calibrator:
             "timestamp": datetime.now().isoformat(),
             "beam_length_m": float(self.BEAM_LENGTH_M),
             "camera": {
-                "index": int(self.CAM_INDEX),
-                "frame_width": int(self.FRAME_W),
-                "frame_height": int(self.FRAME_H)
+                "index": int(self.CAMERA_INDEX),
+                "frame_width": int(self.FRAME_WIDTH),
+                "frame_height": int(self.FRAME_HEIGHT)
             },
             "ball_detection": {
                 "lower_hsv": [float(x) for x in self.lower_hsv] if self.lower_hsv else None,
@@ -189,7 +196,6 @@ class Calibrator:
         with open("config.json", "w") as f:
             json.dump(config, f, indent=2)
         print("[SAVE] Configuration saved to config.json")
-
 
 
     def draw_overlay(self, frame):
@@ -223,20 +229,20 @@ class Calibrator:
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         
         # Show geometry calibration points
-        for i, peg in enumerate(self.peg_points):
-            cv2.circle(overlay, peg, 8, (0, 255, 0), -1)
-            cv2.putText(overlay, f"Peg {i+1}", (peg[0]+10, peg[1]-10),
+        for i, endpoint in enumerate(self.endpoints):
+            cv2.circle(overlay, endpoint, 8, (0, 255, 0), -1)
+            cv2.putText(overlay, f"Endpoint {i+1}", (endpoint[0]+10, endpoint[1]-10),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         
         # Draw line between beam endpoints if both are selected
-        if len(self.peg_points) == 2:
-            cv2.line(overlay, self.peg_points[0], self.peg_points[1], (255, 0, 0), 2)
-        
+        if len(self.endpoints) == 2:
+            cv2.line(overlay, self.endpoints[0], self.endpoints[1], (255, 0, 0), 2)
+
         # Show real-time ball detection if color calibration is complete
-        if self.lower_hsv:
+        if self.hsv_lower:
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            lower = np.array(self.lower_hsv, dtype=np.uint8)
-            upper = np.array(self.upper_hsv, dtype=np.uint8)
+            lower = np.array(self.hsv_lower, dtype=np.uint8)
+            upper = np.array(self.hsv_upper, dtype=np.uint8)
             mask = cv2.inRange(hsv, lower, upper)
             
             # Clean up mask
@@ -269,18 +275,65 @@ class Calibrator:
         
         return overlay
 
-
-
     def run(self):
-        # init camera
-        self.camera = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
-        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
-        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
-        self.camera.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-
-        cv2.namedWindow("Calibration", cv2.WINDOW_NORMAL)
-        cv2.resizeWindow("Calibration", self.frame_width, self.frame_height)
-        cv2.setMouseCallback("Calibration", self.mouse_event)
+        """Main calibration loop with interactive GUI."""
+        # Initialize camera capture
+        self.cap = cv2.VideoCapture(self.CAMERA_INDEX, cv2.CAP_DSHOW)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.FRAME_WIDTH)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.FRAME_HEIGHT)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize latency
+        
+        # Setup OpenCV window and mouse callback
+        cv2.namedWindow("Auto Calibration")
+        cv2.setMouseCallback("Auto Calibration", self.mouse_event)
+        
+        # Attempt servo connection
+        self.connect_servo()
+        
+        # Display instructions
+        print("[INFO] Simple Auto Calibration")
+        print("Phase 1: Click on ball to sample colors, press 'c' when done")
+        print("Phase 2: Click on beam endpoints")
+        print("Phase 3: Press 'l' to find limits")
+        print("Press 's' to save, 'q' to quit")
+        
+        # Main calibration loop
+        while True:
+            ret, frame = self.cap.read()
+            if not ret:
+                continue
+            
+            self.current_frame = frame
+            
+            # Draw overlay and display frame
+            display = self.draw_overlay(frame)
+            cv2.imshow("Auto Calibration", display)
+            
+            # Handle keyboard input
+            key = cv2.waitKey(1) & 0xFF
+            
+            if key == ord('q'):
+                # Quit calibration
+                break
+            elif key == ord('c') and self.phase == "color":
+                # Complete color calibration phase
+                if self.hsv_samples:
+                    self.phase = "geometry"
+                    print("[INFO] Color calibration complete. Click on beam endpoints.")
+            elif key == ord('l') and self.phase == "limits":
+                # Start automatic limit finding
+                self.find_limits_automatically()
+                self.phase = "complete"
+            elif key == ord('s') and self.phase == "complete":
+                # Save configuration and exit
+                self.save_config()
+                break
+        
+        # Clean up resources
+        self.cap.release()
+        cv2.destroyAllWindows()
+        if self.servo:
+            self.servo.close()
 
 if __name__ == "__main__":
     """Run calibration when script is executed directly."""
