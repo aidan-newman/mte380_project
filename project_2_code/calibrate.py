@@ -10,7 +10,7 @@ class Calibrator:
 
     def __init__(self):
         # ballancer settings
-        self.BALANCER_DIAMETER = 0.15
+        self.BALANCER_DIAMETER = 0.3
         self.circle_center = None # Known diameter length in meters
         self.circle_radius = None
         self.drawing_circle = False
@@ -244,16 +244,9 @@ class Calibrator:
         return distance, angle_deg
 
     def draw_overlay(self, frame):
-        """Draw calibration status and instructions overlay on frame.
-        
-        Args:
-            frame: Input BGR image frame
-            
-        Returns:
-            numpy.ndarray: Frame with overlay graphics and text
-        """
+        """Draw calibration status and instructions overlay on frame."""
         overlay = frame.copy()
-        
+
         # Phase-specific instruction text
         phase_text = {
             "color": "Click on ball to sample colors. Press 'c' when done.",
@@ -262,90 +255,74 @@ class Calibrator:
             "limits": "Press 'l' to find limits automatically",
             "complete": "Calibration complete! Press 's' to save"
         }
-        
+
         # Draw current phase and instructions
         cv2.putText(overlay, f"Phase: {self.phase}", (10, 30),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         cv2.putText(overlay, phase_text[self.phase], (10, 60),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
         # Show color calibration progress
         if self.hsv_samples:
             cv2.putText(overlay, f"Color samples: {len(self.hsv_samples)}", (10, 90),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-            
-        if self.phase == "circle" and self.circle_center and self.circle_radius:
-            if isinstance(self.circle_center, tuple) and len(self.circle_center) == 2:
-                cv2.circle(overlay, (int(self.circle_center[0]), int(self.circle_center[1])), 
-                        int(self.circle_radius), (0, 255, 0), 2)
-        
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+        # Draw circle if defined
+        if self.circle_center and self.circle_radius:
+            cx, cy = int(self.circle_center[0]), int(self.circle_center[1])
+            cv2.circle(overlay, (cx, cy), int(self.circle_radius), (0, 255, 0), 2)
+            cv2.circle(overlay, (cx, cy), 5, (0, 0, 255), -1)
+            cv2.putText(overlay, f"Center: ({cx}, {cy})", (cx + 10, cy - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+
         # Show geometry calibration points
         for i, endpoint in enumerate(self.endpoints):
             cv2.circle(overlay, endpoint, 8, (0, 255, 0), -1)
             cv2.putText(overlay, f"Endpoint {i+1}", (endpoint[0]+10, endpoint[1]-10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        
-        # Draw line between beam endpoints if both are selected
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
         if len(self.endpoints) == 2:
             cv2.line(overlay, self.endpoints[0], self.endpoints[1], (255, 0, 0), 2)
 
-        # Show real-time ball detection if color calibration is complete
+        # Detect ball if color calibration is done
+        self.ball_position = None
         if self.lower_hsv:
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
             lower = np.array(self.lower_hsv, dtype=np.uint8)
             upper = np.array(self.upper_hsv, dtype=np.uint8)
             mask = cv2.inRange(hsv, lower, upper)
-            
-            # Clean up mask
             mask = cv2.erode(mask, None, iterations=2)
             mask = cv2.dilate(mask, None, iterations=2)
-            
-            # Find and draw detected ball
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            # Inside draw_overlay, replace the ball detection part with:
 
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if contours:
                 largest = max(contours, key=cv2.contourArea)
                 ((x, y), radius) = cv2.minEnclosingCircle(largest)
                 if radius > 5:
-                    # Draw detection circle
+                    self.ball_position = (int(x), int(y))
                     cv2.circle(overlay, (int(x), int(y)), int(radius), (0, 255, 255), 2)
                     cv2.circle(overlay, (int(x), int(y)), 3, (0, 255, 255), -1)
 
-                    # Draw line from circle center to ball
-                    if self.circle_center:
-                        cv2.line(overlay, (int(self.circle_center[0]), int(self.circle_center[1])),
-                                (int(x), int(y)), (255, 255, 0), 2)
+                    # Draw line and metrics relative to circle
+                    if self.circle_center and self.pixel_to_meter_ratio:
+                        cx, cy = self.circle_center
+                        cv2.line(overlay, (int(cx), int(cy)), (int(x), int(y)), (255, 255, 0), 2)
+                        dx_m = (x - cx) * self.pixel_to_meter_ratio
+                        dy_m = (cy - y) * self.pixel_to_meter_ratio
+                        cv2.putText(overlay, f"x: {dx_m:.3f} m", (int(x)+10, int(y)-20),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+                        cv2.putText(overlay, f"y: {dy_m:.3f} m", (int(x)+10, int(y)-5),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
-                    # Compute distance and angle relative to circle center
-                    distance, angle_deg = self.get_ball_polar_position(x, y)
-                    if distance is not None:
-                        cv2.putText(overlay, f"Dist: {distance:.3f} m", (10, 120),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-                        cv2.putText(overlay, f"Angle: {angle_deg:.1f} deg", (10, 140),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                        distance, angle_deg = self.get_ball_polar_position(x, y)
+                        if distance is not None:
+                            cv2.putText(overlay, f"Dist: {distance:.3f} m", (10, 120),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                            cv2.putText(overlay, f"Angle: {angle_deg:.1f} deg", (10, 140),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
 
-            # Keep your circle drawing code as is:
-            if self.phase == "circle" and self.circle_center and self.circle_radius:
-                cv2.circle(overlay, (int(self.circle_center[0]), int(self.circle_center[1])), 
-                        int(self.circle_radius), (0, 255, 0), 2)
-
-                    
-                    # # Show position if geometry calibration is complete
-                    # if self.pixel_to_meter_ratio:
-                    #     pos = self.detect_ball_position(frame)
-                    #     if pos is not None:
-                    #         cv2.putText(overlay, f"Pos: {pos:.4f}m",
-                    #                    (int(x)+20, int(y)+20),
-                    #                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-        
-        # # Show final results if limit calibration is complete
-        # if self.position_min is not None and self.position_max is not None:
-        #     cv2.putText(overlay, f"Limits: {self.position_min:.4f}m to {self.position_max:.4f}m",
-        #                (10, overlay.shape[0] - 20),
-        #                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
-        
         return overlay
+
 
     def run(self):
         """Main calibration loop with interactive GUI."""
