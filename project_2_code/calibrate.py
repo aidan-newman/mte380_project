@@ -10,7 +10,8 @@ class Calibrator:
 
     def __init__(self):
         # ballancer settings
-        self.circle_center = 0.15 # Known diameter length in meters
+        self.BALANCER_DIAMETER = 0.15
+        self.circle_center = None # Known diameter length in meters
         self.circle_radius = None
         self.drawing_circle = False
 
@@ -25,8 +26,8 @@ class Calibrator:
 
         # color calibration settings
         self.hsv_samples = [] # Collected HSV samples
-        self.hsv_lower = None # Lower HSV bounds
-        self.hsv_upper = None # Upper HSV bounds
+        self.lower_hsv = None # Lower HSV bounds
+        self.upper_hsv = None # Upper HSV bounds
 
         # geometric calibration settings
         self.endpoints = [] # Selected beam endpoints
@@ -247,10 +248,10 @@ class Calibrator:
             cv2.putText(overlay, f"Color samples: {len(self.hsv_samples)}", (10, 90),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
             
-        if self.phase == "circle" and self.circle_center:
-            cv2.circle(overlay, self.circle_center, self.circle_radius, (0, 255, 0), 2)
-            cv2.putText(overlay, "Adjust circle to match real boundary, press 'n' when done",
-                        (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        if self.phase == "circle" and self.circle_center and self.circle_radius:
+            if isinstance(self.circle_center, tuple) and len(self.circle_center) == 2:
+                cv2.circle(overlay, (int(self.circle_center[0]), int(self.circle_center[1])), 
+                        int(self.circle_radius), (0, 255, 0), 2)
         
         # Show geometry calibration points
         for i, endpoint in enumerate(self.endpoints):
@@ -263,10 +264,10 @@ class Calibrator:
             cv2.line(overlay, self.endpoints[0], self.endpoints[1], (255, 0, 0), 2)
 
         # Show real-time ball detection if color calibration is complete
-        if self.hsv_lower:
+        if self.lower_hsv:
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            lower = np.array(self.hsv_lower, dtype=np.uint8)
-            upper = np.array(self.hsv_upper, dtype=np.uint8)
+            lower = np.array(self.lower_hsv, dtype=np.uint8)
+            upper = np.array(self.upper_hsv, dtype=np.uint8)
             mask = cv2.inRange(hsv, lower, upper)
             
             # Clean up mask
@@ -283,19 +284,19 @@ class Calibrator:
                     cv2.circle(overlay, (int(x), int(y)), int(radius), (0, 255, 255), 2)
                     cv2.circle(overlay, (int(x), int(y)), 3, (0, 255, 255), -1)
                     
-                    # Show position if geometry calibration is complete
-                    if self.pixel_to_meter_ratio:
-                        pos = self.detect_ball_position(frame)
-                        if pos is not None:
-                            cv2.putText(overlay, f"Pos: {pos:.4f}m",
-                                       (int(x)+20, int(y)+20),
-                                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                    # # Show position if geometry calibration is complete
+                    # if self.pixel_to_meter_ratio:
+                    #     pos = self.detect_ball_position(frame)
+                    #     if pos is not None:
+                    #         cv2.putText(overlay, f"Pos: {pos:.4f}m",
+                    #                    (int(x)+20, int(y)+20),
+                    #                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
         
-        # Show final results if limit calibration is complete
-        if self.position_min is not None and self.position_max is not None:
-            cv2.putText(overlay, f"Limits: {self.position_min:.4f}m to {self.position_max:.4f}m",
-                       (10, overlay.shape[0] - 20),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+        # # Show final results if limit calibration is complete
+        # if self.position_min is not None and self.position_max is not None:
+        #     cv2.putText(overlay, f"Limits: {self.position_min:.4f}m to {self.position_max:.4f}m",
+        #                (10, overlay.shape[0] - 20),
+        #                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
         
         return overlay
 
