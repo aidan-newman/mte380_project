@@ -10,7 +10,10 @@ class Calibrator:
 
     def __init__(self):
         # ballancer settings
-        self.BALANCER_DIAMETER = 0.15 # Known diameter length in meters
+        self.BALANCER_DIAMETER = 0.3
+        self.circle_center = None # Known diameter length in meters
+        self.circle_radius = None
+        self.drawing_circle = False
 
         # camera settings
         self.CAMERA_INDEX = 0 # Default camera index
@@ -23,12 +26,14 @@ class Calibrator:
 
         # color calibration settings
         self.hsv_samples = [] # Collected HSV samples
-        self.hsv_lower = None # Lower HSV bounds
-        self.hsv_upper = None # Upper HSV bounds
+        self.lower_hsv = None # Lower HSV bounds
+        self.upper_hsv = None # Upper HSV bounds
 
         # geometric calibration settings
         self.endpoints = [] # Selected beam endpoints
         self.pixels_per_meter = None # Pixel-to-meter ratio
+        self.pixel_to_meter_ratio = None
+
 
         # hardware settings
         self.servo = None # Servo connection
@@ -59,15 +64,31 @@ class Calibrator:
             self.servo.write(bytes(data))
 
     def mouse_event(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            if self.phase == "color":
-                self.sample_color(x,y)
-            elif self.phase == "geometry" and len(self.endpoints) < 2:
+        if self.phase == "color":
+            if event == cv2.EVENT_LBUTTONDOWN:
+                self.sample_color(x, y)
+        elif self.phase == "circle":
+            if event == cv2.EVENT_LBUTTONDOWN:
+                # Start drawing
+                self.circle_center = (x, y)
+                self.drawing_circle = True
+
+            elif event == cv2.EVENT_MOUSEMOVE and self.drawing_circle:
+                # Update radius dynamically
+                dx = x - self.circle_center[0]
+                dy = y - self.circle_center[1]
+                self.circle_radius = int(math.sqrt(dx**2 + dy**2))
+
+            elif event == cv2.EVENT_LBUTTONUP:
+                # Stop drawing
+                self.drawing_circle = False
+
+        elif self.phase == "geometry":
+            if event == cv2.EVENT_LBUTTONDOWN and len(self.endpoints) < 2:
                 self.endpoints.append((x, y))
                 print(f"[GEO] Endpoint {len(self.endpoints)} selected")
                 if len(self.endpoints) == 2:
                     self.calculate_geometry()
-
 
     def sample_color(self, x, y):
         if self.current_frame is None:
@@ -93,19 +114,23 @@ class Calibrator:
             s_margin = max(10, (np.max(samples[:, 1]) - np.min(samples[:, 1])) * 0.15)
             v_margin = max(10, (np.max(samples[:, 2]) - np.min(samples[:, 2])) * 0.15)
             
+            # Convert samples to int to avoid overflow
+            samples_int = samples.astype(int)
+
             # Set lower bounds with margin
             self.lower_hsv = [
-                max(0, np.min(samples[:, 0]) - h_margin),
-                max(0, np.min(samples[:, 1]) - s_margin),
-                max(0, np.min(samples[:, 2]) - v_margin)
+                max(0, np.min(samples_int[:, 0]) - h_margin),
+                max(0, np.min(samples_int[:, 1]) - s_margin),
+                max(0, np.min(samples_int[:, 2]) - v_margin)
             ]
-            
+
             # Set upper bounds with margin
             self.upper_hsv = [
-                min(179, np.max(samples[:, 0]) + h_margin),
-                min(255, np.max(samples[:, 1]) + s_margin),
-                min(255, np.max(samples[:, 2]) + v_margin)
+                min(179, np.max(samples_int[:, 0]) + h_margin),
+                min(255, np.max(samples_int[:, 1]) + s_margin),
+                min(255, np.max(samples_int[:, 2]) + v_margin)
             ]
+
             
             print(f"[COLOR] Samples: {len(self.hsv_samples)}")
 
@@ -197,83 +222,107 @@ class Calibrator:
             json.dump(config, f, indent=2)
         print("[SAVE] Configuration saved to config.json")
 
+    def get_ball_polar_position(self, ball_x, ball_y):
+        """Compute distance (m) and angle (deg) of ball relative to circle center."""
+        if self.circle_center is None or self.pixel_to_meter_ratio is None:
+            return None, None
+
+        dx_pixels = ball_x - self.circle_center[0]
+        dy_pixels = ball_y - self.circle_center[1]
+
+        # Convert to meters
+        dx_m = dx_pixels * self.pixel_to_meter_ratio
+        dy_m = dy_pixels * self.pixel_to_meter_ratio
+
+        # Distance from center
+        distance = math.sqrt(dx_m**2 + dy_m**2)
+
+        # Angle relative to positive x-axis (to the right)
+        angle_rad = math.atan2(dy_m, dx_m)
+        angle_deg = math.degrees(angle_rad)
+
+        return distance, angle_deg
 
     def draw_overlay(self, frame):
-        """Draw calibration status and instructions overlay on frame.
-        
-        Args:
-            frame: Input BGR image frame
-            
-        Returns:
-            numpy.ndarray: Frame with overlay graphics and text
-        """
+        """Draw calibration status and instructions overlay on frame."""
         overlay = frame.copy()
-        
+
         # Phase-specific instruction text
         phase_text = {
             "color": "Click on ball to sample colors. Press 'c' when done.",
+            "circle": "Draw and size circle around platform. Press 'n' when done.",
             "geometry": "Click on beam endpoints (2 points)",
             "limits": "Press 'l' to find limits automatically",
             "complete": "Calibration complete! Press 's' to save"
         }
-        
+
         # Draw current phase and instructions
         cv2.putText(overlay, f"Phase: {self.phase}", (10, 30),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
         cv2.putText(overlay, phase_text[self.phase], (10, 60),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
         # Show color calibration progress
         if self.hsv_samples:
             cv2.putText(overlay, f"Color samples: {len(self.hsv_samples)}", (10, 90),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+        # Draw circle if defined
+        if self.circle_center and self.circle_radius:
+            cx, cy = int(self.circle_center[0]), int(self.circle_center[1])
+            cv2.circle(overlay, (cx, cy), int(self.circle_radius), (0, 255, 0), 2)
+            cv2.circle(overlay, (cx, cy), 5, (0, 0, 255), -1)
+            cv2.putText(overlay, f"Center: ({cx}, {cy})", (cx + 10, cy - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+
         # Show geometry calibration points
         for i, endpoint in enumerate(self.endpoints):
             cv2.circle(overlay, endpoint, 8, (0, 255, 0), -1)
             cv2.putText(overlay, f"Endpoint {i+1}", (endpoint[0]+10, endpoint[1]-10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-        
-        # Draw line between beam endpoints if both are selected
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
         if len(self.endpoints) == 2:
             cv2.line(overlay, self.endpoints[0], self.endpoints[1], (255, 0, 0), 2)
 
-        # Show real-time ball detection if color calibration is complete
-        if self.hsv_lower:
+        # Detect ball if color calibration is done
+        self.ball_position = None
+        if self.lower_hsv:
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            lower = np.array(self.hsv_lower, dtype=np.uint8)
-            upper = np.array(self.hsv_upper, dtype=np.uint8)
+            lower = np.array(self.lower_hsv, dtype=np.uint8)
+            upper = np.array(self.upper_hsv, dtype=np.uint8)
             mask = cv2.inRange(hsv, lower, upper)
-            
-            # Clean up mask
             mask = cv2.erode(mask, None, iterations=2)
             mask = cv2.dilate(mask, None, iterations=2)
-            
-            # Find and draw detected ball
+
             contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if contours:
                 largest = max(contours, key=cv2.contourArea)
                 ((x, y), radius) = cv2.minEnclosingCircle(largest)
                 if radius > 5:
-                    # Draw detection circle
+                    self.ball_position = (int(x), int(y))
                     cv2.circle(overlay, (int(x), int(y)), int(radius), (0, 255, 255), 2)
                     cv2.circle(overlay, (int(x), int(y)), 3, (0, 255, 255), -1)
-                    
-                    # Show position if geometry calibration is complete
-                    if self.pixel_to_meter_ratio:
-                        pos = self.detect_ball_position(frame)
-                        if pos is not None:
-                            cv2.putText(overlay, f"Pos: {pos:.4f}m",
-                                       (int(x)+20, int(y)+20),
-                                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-        
-        # Show final results if limit calibration is complete
-        if self.position_min is not None and self.position_max is not None:
-            cv2.putText(overlay, f"Limits: {self.position_min:.4f}m to {self.position_max:.4f}m",
-                       (10, overlay.shape[0] - 20),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
-        
+
+                    # Draw line and metrics relative to circle
+                    if self.circle_center and self.pixel_to_meter_ratio:
+                        cx, cy = self.circle_center
+                        cv2.line(overlay, (int(cx), int(cy)), (int(x), int(y)), (255, 255, 0), 2)
+                        dx_m = (x - cx) * self.pixel_to_meter_ratio
+                        dy_m = (cy - y) * self.pixel_to_meter_ratio
+                        cv2.putText(overlay, f"x: {dx_m:.3f} m", (int(x)+10, int(y)-20),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+                        cv2.putText(overlay, f"y: {dy_m:.3f} m", (int(x)+10, int(y)-5),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+
+                        distance, angle_deg = self.get_ball_polar_position(x, y)
+                        if distance is not None:
+                            cv2.putText(overlay, f"Dist: {distance:.3f} m", (10, 120),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                            cv2.putText(overlay, f"Angle: {angle_deg:.1f} deg", (10, 140),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+
         return overlay
+
 
     def run(self):
         """Main calibration loop with interactive GUI."""
@@ -318,8 +367,17 @@ class Calibrator:
             elif key == ord('c') and self.phase == "color":
                 # Complete color calibration phase
                 if self.hsv_samples:
+                    self.phase = "circle"
+                    print("[INFO] Color calibration complete. Draw and resize circle over the platform.")
+                    
+                    #self.phase = "geometry"
+                    #print("[INFO] Color calibration complete. Click on beam endpoints.")
+            elif key == ord('n') and self.phase == "circle":
+                if self.circle_center and self.circle_radius > 0:
+                    self.pixel_to_meter_ratio = (self.BALANCER_DIAMETER / 2) / self.circle_radius
+                    print(f"[CIRCLE] Pixel-to-meter ratio: {self.pixel_to_meter_ratio:.6f}")
                     self.phase = "geometry"
-                    print("[INFO] Color calibration complete. Click on beam endpoints.")
+                    print("[INFO] Circle calibration complete. Click on beam endpoints.")
             elif key == ord('l') and self.phase == "limits":
                 # Start automatic limit finding
                 self.find_limits_automatically()
