@@ -1,7 +1,6 @@
 from datetime import datetime
 import math
 import cv2
-import serial
 import numpy as np
 import time
 import json
@@ -11,9 +10,13 @@ class Calibrator:
     def __init__(self):
         # ballancer settings
         self.BALANCER_DIAMETER = 0.3
+        self.position_max = self.BALANCER_DIAMETER / 2 # Max position limit
+        self.position_min = -self.BALANCER_DIAMETER / 2 # Min position limit
         self.circle_center = None # Known diameter length in meters
         self.circle_radius = None
         self.drawing_circle = False
+        self.motor_points = [] # Selected motor points
+        self.motor_angles = {} # Motor angles dictionary
 
         # camera settings
         self.CAMERA_INDEX = 0 # Default camera index
@@ -30,38 +33,14 @@ class Calibrator:
         self.upper_hsv = None # Upper HSV bounds
 
         # geometric calibration settings
-        self.endpoints = [] # Selected beam endpoints
         self.pixels_per_meter = None # Pixel-to-meter ratio
         self.pixel_to_meter_ratio = None
 
-
         # hardware settings
-        self.servo = None # Servo connection
-        self.servo_port = "COM3" # Servo port
+        self.servo_port = "COM4" # Servo port
         self.servo_baudrate = 9600 # Servo baudrate
         self.neutral_angle = 65 # Neutral servo angle
 
-        self.position_max = None # Max position limit
-        self.position_min = None # Min position limit
-
-    def connect_servo(self):
-        try:
-            self.servo = serial.Serial(self.servo_port, self.servo_baudrate)
-            time.sleep(2)  # wait for servo to initialize
-            print("Servo connected successfully.")
-            return True
-        except Exception as e:
-            print(f"Failed to connect to servo: {e}")
-            return False
-
-    def send_servo_angle(self, angle1, angle2, angle3):
-        if self.servo:
-            # Clip angle to safe range and send as byte
-            angle1 = int(np.clip(angle1, 0, 140))
-            angle2 = int(np.clip(angle2, 0, 140))
-            angle3 = int(np.clip(angle3, 0, 140))
-            data = [angle1, angle2, angle3]
-            self.servo.write(bytes(data))
 
     def mouse_event(self, event, x, y, flags, param):
         if self.phase == "color":
@@ -72,23 +51,18 @@ class Calibrator:
                 # Start drawing
                 self.circle_center = (x, y)
                 self.drawing_circle = True
-
             elif event == cv2.EVENT_MOUSEMOVE and self.drawing_circle:
                 # Update radius dynamically
                 dx = x - self.circle_center[0]
                 dy = y - self.circle_center[1]
                 self.circle_radius = int(math.sqrt(dx**2 + dy**2))
-
+                self.pixel_to_meter_ratio = self.BALANCER_DIAMETER / (2 * self.circle_radius)
             elif event == cv2.EVENT_LBUTTONUP:
                 # Stop drawing
                 self.drawing_circle = False
-
-        elif self.phase == "geometry":
-            if event == cv2.EVENT_LBUTTONDOWN and len(self.endpoints) < 2:
-                self.endpoints.append((x, y))
-                print(f"[GEO] Endpoint {len(self.endpoints)} selected")
-                if len(self.endpoints) == 2:
-                    self.calculate_geometry()
+        elif self.phase == "motor_select":
+            if event == cv2.EVENT_LBUTTONDOWN and len(self.motor_points) < 3:
+                self.motor_points.append((x, y))
 
     def sample_color(self, x, y):
         if self.current_frame is None:
@@ -134,94 +108,6 @@ class Calibrator:
             
             print(f"[COLOR] Samples: {len(self.hsv_samples)}")
 
-
-    def calculate_geometry(self):
-        """Calculate pixel-to-meter conversion ratio from beam endpoint coordinates."""
-        p1, p2 = self.endpoints
-        
-        # Calculate pixel distance between beam endpoints
-        distance1 = math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
-
-        # Convert to meters using known balancer diameter
-        self.pixel_to_meter_ratio = self.BALANCER_DIAMETER / distance1
-        print(f"[GEO] Pixel-to-meter ratio: {self.pixel_to_meter_ratio:.6f}")
-        
-        # Advance to limits calibration phase
-        self.phase = "limits"
-
-
-    def detect_ball_position(self, frame):
-        if not self.lower_hsv:
-            return None
-        
-        # Convert to HSV and create color mask
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        lower = np.array(self.lower_hsv, dtype=np.uint8)
-        upper = np.array(self.upper_hsv, dtype=np.uint8)
-        mask = cv2.inRange(hsv, lower, upper)
-        
-        # Clean up mask with morphological operations
-        mask = cv2.erode(mask, None, iterations=2)
-        mask = cv2.dilate(mask, None, iterations=2)
-        
-        # Find contours in mask
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not contours:
-            return None
-        
-        # Get largest contour (assumed to be ball)
-        largest = max(contours, key=cv2.contourArea)
-        ((x, y), radius) = cv2.minEnclosingCircle(largest)
-        
-        # Filter out very small detections
-        if radius < 5:
-            return None
-        
-        # Convert pixel position to meters from center
-        center_x = frame.shape[1] // 2
-        pixel_offset = x - center_x
-        meters_offset = pixel_offset * self.pixel_to_meter_ratio
-        
-        return meters_offset
-
-    def find_limits_automatically(self):
-        # Estimate limits without servo if connection failed
-        self.position_min = -self.BEAM_LENGTH_M / 2
-        self.position_max = self.BEAM_LENGTH_M / 2
-        print("[LIMITS] Estimated without servo")
-        return
-
-
-    def save_config(self):
-        """Save all calibration results to config.json file."""
-        config = {
-            "timestamp": datetime.now().isoformat(),
-            "beam_length_m": float(self.BEAM_LENGTH_M),
-            "camera": {
-                "index": int(self.CAMERA_INDEX),
-                "frame_width": int(self.FRAME_WIDTH),
-                "frame_height": int(self.FRAME_HEIGHT)
-            },
-            "ball_detection": {
-                "lower_hsv": [float(x) for x in self.lower_hsv] if self.lower_hsv else None,
-                "upper_hsv": [float(x) for x in self.upper_hsv] if self.upper_hsv else None
-            },
-            "calibration": {
-                "pixel_to_meter_ratio": float(self.pixel_to_meter_ratio) if self.pixel_to_meter_ratio else None,
-                "position_min_m": float(self.position_min) if self.position_min else None,
-                "position_max_m": float(self.position_max) if self.position_max else None
-            },
-            "servo": {
-                "port": str(self.servo_port),
-                "neutral_angle": int(self.neutral_angle)
-            }
-        }
-        
-        # Write configuration to JSON file
-        with open("config.json", "w") as f:
-            json.dump(config, f, indent=2)
-        print("[SAVE] Configuration saved to config.json")
-
     def get_ball_polar_position(self, ball_x, ball_y):
         """Compute distance (m) and angle (deg) of ball relative to circle center."""
         if self.circle_center is None or self.pixel_to_meter_ratio is None:
@@ -251,8 +137,7 @@ class Calibrator:
         phase_text = {
             "color": "Click on ball to sample colors. Press 'c' when done.",
             "circle": "Draw and size circle around platform. Press 'n' when done.",
-            "geometry": "Click on beam endpoints (2 points)",
-            "limits": "Press 'l' to find limits automatically",
+            "motor_select": "Click on all 3 motors to select them. Press 'm' when done.",
             "complete": "Calibration complete! Press 's' to save"
         }
 
@@ -275,15 +160,31 @@ class Calibrator:
             cv2.putText(overlay, f"Center: ({cx}, {cy})", (cx + 10, cy - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
-        # Show geometry calibration points
-        for i, endpoint in enumerate(self.endpoints):
-            cv2.circle(overlay, endpoint, 8, (0, 255, 0), -1)
-            cv2.putText(overlay, f"Endpoint {i+1}", (endpoint[0]+10, endpoint[1]-10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
-        if len(self.endpoints) == 2:
-            cv2.line(overlay, self.endpoints[0], self.endpoints[1], (255, 0, 0), 2)
+        if self.motor_points and len(self.motor_points) > 0:
+            
+            for i, (mx, my) in enumerate(self.motor_points, start=1):
+                # Draw motor point dot
+                cv2.circle(overlay, (int(mx), int(my)), 5, (0, 255, 255), -1)
 
+                # Draw line to circle center
+                if self.circle_center:
+                    cv2.line(overlay, (int(mx), int(my)), (cx, cy), (255, 0, 0), 2)
+
+                    # Compute distance and angle
+                    if self.pixel_to_meter_ratio:
+                        dx_m = (mx - cx) * self.pixel_to_meter_ratio
+                        dy_m = (cy - my) * self.pixel_to_meter_ratio
+                        distance = (dx_m**2 + dy_m**2)**0.5
+                        angle_deg = np.degrees(np.arctan2(dy_m, dx_m))
+                        self.motor_angles[f"motor{i}"] = angle_deg
+
+                        # Display info near motor point
+                        cv2.putText(overlay, f"M{i}: {distance:.3f} m", (int(mx)+10, int(my)-20),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                        cv2.putText(overlay, f"θ: {angle_deg:.1f}°", (int(mx)+10, int(my)-5),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                    
         # Detect ball if color calibration is done
         self.ball_position = None
         if self.lower_hsv:
@@ -323,6 +224,50 @@ class Calibrator:
 
         return overlay
 
+    def save_config(self):
+        """Save all calibration results to config.json file."""
+        config = {
+            "timestamp": datetime.now().isoformat(),
+            "balancer_diameter": float(self.BALANCER_DIAMETER),
+            "camera": {
+                "index": int(self.CAMERA_INDEX),
+                "frame_width": int(self.FRAME_WIDTH),
+                "frame_height": int(self.FRAME_HEIGHT)
+            },
+            "ball_detection": {
+                "lower_hsv": [float(x) for x in self.lower_hsv] if self.lower_hsv else None,
+                "upper_hsv": [float(x) for x in self.upper_hsv] if self.upper_hsv else None
+            },
+            "calibration": {
+                "pixel_to_meter_ratio": float(self.pixel_to_meter_ratio) if self.pixel_to_meter_ratio else None,
+                "position_min_m": self.position_min,
+                "position_max_m": self.position_max,
+                "center_x": self.circle_center[0] if self.circle_center else None,
+                "center_y": self.circle_center[1] if self.circle_center else None
+            },
+            "servo": {
+                "port": str(self.servo_port),
+                "neutral_angle": int(self.neutral_angle)
+            },
+            "motor": {
+                "motor_points": {
+                    "motor1": [int(x) for x in self.motor_points[0]] if len(self.motor_points) > 0 else None,
+                    "motor2": [int(x) for x in self.motor_points[1]] if len(self.motor_points) > 1 else None,
+                    "motor3": [int(x) for x in self.motor_points[2]] if len(self.motor_points) > 2 else None        
+                },
+                "motor_angles": {
+                    "motor1": self.motor_angles.get("motor1", None),
+                    "motor2": self.motor_angles.get("motor2", None),
+                    "motor3": self.motor_angles.get("motor3", None)
+                }
+            }
+        }
+        
+        # Write configuration to JSON file
+        with open("config.json", "w") as f:
+            json.dump(config, f, indent=2)
+        print("[SAVE] Configuration saved to config.json")
+
 
     def run(self):
         """Main calibration loop with interactive GUI."""
@@ -335,9 +280,6 @@ class Calibrator:
         # Setup OpenCV window and mouse callback
         cv2.namedWindow("Auto Calibration")
         cv2.setMouseCallback("Auto Calibration", self.mouse_event)
-        
-        # Attempt servo connection
-        self.connect_servo()
         
         # Display instructions
         print("[INFO] Simple Auto Calibration")
@@ -369,19 +311,14 @@ class Calibrator:
                 if self.hsv_samples:
                     self.phase = "circle"
                     print("[INFO] Color calibration complete. Draw and resize circle over the platform.")
-                    
-                    #self.phase = "geometry"
-                    #print("[INFO] Color calibration complete. Click on beam endpoints.")
             elif key == ord('n') and self.phase == "circle":
                 if self.circle_center and self.circle_radius > 0:
-                    self.pixel_to_meter_ratio = (self.BALANCER_DIAMETER / 2) / self.circle_radius
                     print(f"[CIRCLE] Pixel-to-meter ratio: {self.pixel_to_meter_ratio:.6f}")
-                    self.phase = "geometry"
-                    print("[INFO] Circle calibration complete. Click on beam endpoints.")
-            elif key == ord('l') and self.phase == "limits":
-                # Start automatic limit finding
-                self.find_limits_automatically()
-                self.phase = "complete"
+                    self.phase = "motor_select"
+            elif key == ord('m') and self.phase == "motor_select":
+                if len(self.motor_points) == 3:
+                    self.phase = "complete"
+                    print("[INFO] Motor selection complete. Calibration finished.")
             elif key == ord('s') and self.phase == "complete":
                 # Save configuration and exit
                 self.save_config()
