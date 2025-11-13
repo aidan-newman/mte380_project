@@ -116,9 +116,9 @@ class BallDetector:
             # Draw coordinate info
             if show_info:
                 cv2.putText(overlay, f"x: {ball_x:.4f} m", (ball_center[0] - 40, ball_center[1] - 40),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
                 cv2.putText(overlay, f"y: {ball_y:.4f} m", (ball_center[0] - 40, ball_center[1] - 20),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
         return overlay
 
