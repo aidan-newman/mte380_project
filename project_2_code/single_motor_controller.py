@@ -57,6 +57,8 @@ class BasicPIDController:
         try:
             self.servo = serial.Serial(self.servo_port, 9600)
             time.sleep(2)
+            self.servo.reset_input_buffer()
+            self.servo.reset_output_buffer()
             print("[SERVO] Connected")
             return True
         except Exception as e:
