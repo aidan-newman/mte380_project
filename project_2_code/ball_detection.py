@@ -62,7 +62,7 @@ class BallDetector:
             return False, None, None, (0.0, 0.0)
         
         largest_contour = max(contours, key=cv2.contourArea)
-        ((x, y), ball_radius) = cv2.minEnclosingCircle(largest_contour)
+        ((ball_x_pixels, ball_y_pixels), ball_radius) = cv2.minEnclosingCircle(largest_contour)
         
         if ball_radius < 5 or ball_radius > 100:
             return False, None, None, (0.0, 0.0)
@@ -71,17 +71,13 @@ class BallDetector:
         center_x = self.center_x
         center_y = self.center_y
         
-        normalized_x = (x - center_x) / center_x
-        normalized_y = (y - center_y) / center_y
+        normalized_x = (ball_x_pixels - center_x) / center_x
+        normalized_y = (ball_y_pixels - center_y) / center_y
         
         position_m_x = normalized_x * self.scale_factor
         position_m_y = normalized_y * self.scale_factor
         
-        # --- Convert to cylindrical coordinates ---
-        r = np.sqrt(position_m_x**2 + position_m_y**2)        # radial distance (meters)
-        theta = np.arctan2(position_m_y, position_m_x)        # angle (radians)
-        
-        return True, (int(x), int(y)), ball_radius, (r, theta)
+        return True, (int(ball_x_pixels), int(ball_y_pixels)), ball_radius, (position_m_x, position_m_y)
 
 
     def draw_detection(self, frame, show_info=True):
