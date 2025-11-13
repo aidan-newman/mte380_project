@@ -83,31 +83,45 @@ class BallDetector:
     def draw_detection(self, frame, show_info=True):
         found, ball_center, ball_radius, ball_relative = self.detect_ball(frame)
         ball_x, ball_y = ball_relative[0], ball_relative[1]
-        
+
         overlay = frame.copy()
         height, width = frame.shape[:2]
         center_x = self.center_x
         center_y = self.center_y
 
+        # Draw center cross
         cv2.line(overlay, (center_x, 0), (center_x, height), (255, 255, 255), 1)
         cv2.putText(overlay, "Center", (center_x + 5, 20),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
         cv2.line(overlay, (0, center_y), (width, center_y), (255, 255, 255), 1)
         cv2.putText(overlay, "Center", (5, center_y - 5),
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
         if found:
+            # Draw the ball
             cv2.circle(overlay, ball_center, int(ball_radius), (0, 255, 0), 2)
             cv2.circle(overlay, ball_center, 3, (0, 255, 0), -1)
-            
+
+            # ---------- Draw Vector from Center to Ball ----------
+            cv2.arrowedLine(
+                overlay,
+                (center_x, center_y),     # start at image center
+                ball_center,              # end at ball location
+                (0, 0, 255),              # red arrow
+                2,                        # thickness
+                tipLength=0.15            # arrow head size
+            )
+
+            # Draw coordinate info
             if show_info:
                 cv2.putText(overlay, f"x: {ball_x:.4f} m", (ball_center[0] - 40, ball_center[1] - 40),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
                 cv2.putText(overlay, f"y: {ball_y:.4f} m", (ball_center[0] - 40, ball_center[1] - 20),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
-        
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
+
         return overlay
+
     
 
 # For testing/calibration when run directly
