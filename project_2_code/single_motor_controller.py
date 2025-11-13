@@ -66,23 +66,54 @@ class BasicPIDController:
             return False
 
     def send_servo_angle(self, angle):
-        """Send angle command to servo motor (clipped for safety)."""
-        if self.servo:
-            if self.motor1_enabled:
-                print("[SERVO] Using motor 1")
-                angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "\n"
-            elif self.motor2_enabled:
-                print("[SERVO] Using motor 2")
-                angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "\n"
-            elif self.motor3_enabled:
-                print("[SERVO] Using motor 3")
-                angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "\n"
-            
-            try:
-                self.servo.write(bytes(angle_data, 'utf-8'))
-                print(f"[SERVO] Sent angles: {angle_data}")
-            except Exception as e:
-                print(f"[SERVO] Send failed: {e}")
+        """Send angle command to servo motor (clipped for safety) with rate limiting."""
+        if not self.servo:
+            return
+
+        # Initialize timestamp if not present
+        if not hasattr(self, "_last_servo_write"):
+            self._last_servo_write = 0
+        
+        # Rate limit to ~30 Hz (every 33 ms)
+        now = time.time()
+        if now - self._last_servo_write < 0.033:
+            return
+        self._last_servo_write = now
+
+        # Build command
+        if self.motor1_enabled:
+            print("[SERVO] Using motor 1")
+            angle_data = (
+                f"{int(self.neutral_angle - angle)},"
+                f"{int(self.neutral_angle)},"
+                f"{int(self.neutral_angle)}\n"
+            )
+
+        elif self.motor2_enabled:
+            print("[SERVO] Using motor 2")
+            angle_data = (
+                f"{int(self.neutral_angle)},"
+                f"{int(self.neutral_angle - angle)},"
+                f"{int(self.neutral_angle)}\n"
+            )
+
+        elif self.motor3_enabled:
+            print("[SERVO] Using motor 3")
+            angle_data = (
+                f"{int(self.neutral_angle)},"
+                f"{int(self.neutral_angle)},"
+                f"{int(self.neutral_angle - angle)}\n"
+            )
+        else:
+            return
+
+        # Send safely
+        try:
+            self.servo.write(angle_data.encode("utf-8"))
+            print(f"[SERVO] Sent angles: {angle_data.strip()}")
+        except Exception as e:
+            print(f"[SERVO] Send failed: {e}")
+
 
     def update_pid(self, position, dt=0.033):
         """Perform PID calculation and return control output."""
