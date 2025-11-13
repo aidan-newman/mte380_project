@@ -81,8 +81,8 @@ class BallDetector:
 
 
     def draw_detection(self, frame, show_info=True):
-        found, ball_center, ball_radius, cyl_coords = self.detect_ball(frame)
-        r, theta = cyl_coords
+        found, ball_center, ball_radius, ball_relative = self.detect_ball(frame)
+        ball_x, ball_y = ball_relative[0], ball_relative[1]
         
         overlay = frame.copy()
         height, width = frame.shape[:2]
@@ -102,9 +102,9 @@ class BallDetector:
             cv2.circle(overlay, ball_center, 3, (0, 255, 0), -1)
             
             if show_info:
-                cv2.putText(overlay, f"r: {r:.4f} m", (ball_center[0] - 40, ball_center[1] - 40),
+                cv2.putText(overlay, f"x: {ball_x:.4f} m", (ball_center[0] - 40, ball_center[1] - 40),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-                cv2.putText(overlay, f"theta: {np.degrees(theta):.1f} deg", (ball_center[0] - 40, ball_center[1] - 20),
+                cv2.putText(overlay, f"y: {ball_y:.4f} m", (ball_center[0] - 40, ball_center[1] - 20),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 1)
         
         return overlay
