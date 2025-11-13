@@ -136,12 +136,12 @@ def main():
         frame = cv2.resize(frame, (640, 480))
         
         vis_frame = detector.draw_detection(frame)
-        found, ball_center, ball_radius, cyl_coords = detector.detect_ball(frame)
-        r, theta = cyl_coords
+        found, ball_center, ball_radius, ball_relative = detector.detect_ball(frame)
+        x, y = ball_relative
         
         # Show detection info in console
         if found:
-            print(f"Ball detected — r = {r:.4f} m, θ = {np.degrees(theta):.2f}°")
+            print(f"Ball detected — x = {x} -y = {y}")
         else:
             print("No ball detected.")
         
