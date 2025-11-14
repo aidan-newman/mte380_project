@@ -67,9 +67,9 @@ class BasicPIDController:
         if not hasattr(self, "_last_servo_write"):
             self._last_servo_write = 0
         
-        # Rate limit to ~30 Hz (every 33 ms)
+        # Rate limit to ~15 Hz (every 67 ms)
         now = time.time()
-        if now - self._last_servo_write < 0.033:
+        if now - self._last_servo_write < 0.067:
             return
     
         self._last_servo_write = now
