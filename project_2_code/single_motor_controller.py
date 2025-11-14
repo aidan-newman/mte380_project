@@ -179,11 +179,11 @@ class BasicPIDController:
                 control_output = 0
                 match self.curr_motor:
                     case 0:
-                        control_output = self.update_pid(m0_dist)
+                        control_output = self.update_pid(-m0_dist)
                     case 1:
-                        control_output = self.update_pid(m1_dist)
+                        control_output = self.update_pid(-m1_dist)
                     case 2:
-                        control_output = self.update_pid(m2_dist)
+                        control_output = self.update_pid(-m2_dist)
                     case _:
                         print("ERROR: Invalid motor value (183)")
 
