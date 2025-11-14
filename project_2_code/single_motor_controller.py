@@ -49,7 +49,10 @@ class BasicPIDController:
     def connect_servo(self):
         """Try to open serial connection to servo, return True if success."""
         try:
-            self.servo = serial.Serial(self.servo_port, 9600, timeout=1, write_timeout=0.1)
+            self.servo = serial.Serial(self.servo_port, 9600)
+            # Make reads and writes non-blocking to prevent freezes
+            self.servo.timeout = 0
+            self.servo.write_timeout = 0
             time.sleep(2)
             self.servo.reset_input_buffer()
             self.servo.reset_output_buffer()
@@ -58,6 +61,7 @@ class BasicPIDController:
         except Exception as e:
             print(f"[SERVO] Failed: {e}")
             return False
+
 
     def send_servo_angle(self, angle):
         """Send angle command to servo motor (clipped for safety)."""
