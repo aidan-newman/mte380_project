@@ -43,7 +43,7 @@ class BasicPIDController:
         self.position_queue = queue.Queue(maxsize=1)
         self.running = False    # Main run flag for clean shutdown
 
-        self.curr_motor = 0 # 0 1 2
+        self.curr_motor = 1 # 0 1 2
 
     def connect_servo(self):
         """Try to open serial connection to servo, return True if success."""
@@ -74,15 +74,15 @@ class BasicPIDController:
     
         self._last_servo_write = now
         
-        match self.curr_motor.get():
+        match self.curr_motor:
             case 0:
-                print("[SERVO] Using motor 1")
+                print("[SERVO] Using motor 0")
                 angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "\n"
             case 1:
-                print("[SERVO] Using motor 2")
+                print("[SERVO] Using motor 1")
                 angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "\n"
             case 2:
-                print("[SERVO] Using motor 3")
+                print("[SERVO] Using motor 2")
                 angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "\n"
             case _:
                 print("ERROR: Invalid motor value (88)")
@@ -174,11 +174,16 @@ class BasicPIDController:
                 control_output = 0
                 match self.curr_motor:
                     case 0:
+                        print("[CONTROL] update motor 0 PID")
                         control_output = self.update_pid(m0_dist)
                     case 1:
+                        print("[CONTROL] update motor 1 PID")
                         control_output = self.update_pid(m1_dist)
                     case 2:
+                        print("[CONTROL] update motor 2 PID")
                         control_output = self.update_pid(m2_dist)
+                    case _:
+                        print("ERROR: Invalid motor value (183)")
 
                 # Send control command to servo (real or simulated)
                 self.send_servo_angle(control_output)
@@ -247,16 +252,16 @@ class BasicPIDController:
         self.setpoint_label.pack()
 
         # motor selection
-        self.curr_motor = tk.IntVar(value=0)
+        # self.curr_motor = tk.IntVar(value=0)
 
-        ttk.Label(self.root, text="Select Motor", font=("Arial", 12)).pack()
-        for i, name in enumerate(["Motor 0", "Motor 1", "Motor 2"]):
-            ttk.Radiobutton(
-                self.root,
-                text=name,
-                value=i,
-                variable=self.curr_motor
-            ).pack(anchor="w")
+        # ttk.Label(self.root, text="Select Motor", font=("Arial", 12)).pack()
+        # for i, name in enumerate(["Motor 0", "Motor 1", "Motor 2"]):
+        #     ttk.Radiobutton(
+        #         self.root,
+        #         text=name,
+        #         value=i,
+        #         variable=self.curr_motor
+        #     ).pack(anchor="w")
 
         # Button group for actions
         button_frame = ttk.Frame(self.root)
