@@ -50,21 +50,39 @@ void setup() {
 }
 
 void loop() {
-  while (Serial.available()) {
-    char c = Serial.read();
+  int angles[3];
+  int angle1 = NEUTRAL_ANGLE;
+  int angle2 = NEUTRAL_ANGLE;
+  int angle3 = NEUTRAL_ANGLE;
 
-    // If newline, parse buffer
-    if (c == '\n') {
-      input_buf[buf_idx] = '\0';
-      parseInput(input_buf);
-      buf_idx = 0; // reset buffer index
-    } 
-    // Otherwise, store character in buffer
-    else if (buf_idx < BUF_SIZE - 1) {
-      input_buf[buf_idx++] = c;
+  if (Serial.available()) {
+    String input = Serial.readStringUntil('\n');  // Read until newline
+    numValues = 0;
+
+    // Split by commas
+    char buf[input.length() + 1];
+    input.toCharArray(buf, sizeof(buf));
+    char *token = strtok(buf, ",");
+    while (token != NULL && numValues < MAX_VALUES) {
+      values[numValues++] = atoi(token);
+      token = strtok(NULL, ",");
     }
   }
 
-  // Optional: small delay to avoid saturating CPU
+    // Print what we got
+    Serial.print("Received ");
+    Serial.print(numValues);
+    Serial.println(" values:");
+    for (int i = 0; i < numValues; i++) {
+      Serial.println(values[i]);
+  }
+
+
+  if(values[0] && values[1] && values[2]) {
+    moveServo(0, values[0]);
+    moveServo(1, values[1]);
+    moveServo(2, values[2]);
+  }
+
   delay(1);
 }
