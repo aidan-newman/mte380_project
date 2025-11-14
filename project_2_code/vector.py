@@ -55,9 +55,6 @@ class Vector:
 
     def project(self, v):
         return self.dot(v.unit()) * v.unit()
-    
-    def projectu(self, v):
-        return self.dot(v) * v
 
     def flip_x(self):
         return Vector(
