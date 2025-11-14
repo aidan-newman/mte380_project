@@ -50,9 +50,6 @@ class BasicPIDController:
         """Try to open serial connection to servo, return True if success."""
         try:
             self.servo = serial.Serial(self.servo_port, 9600)
-            # Make reads and writes non-blocking to prevent freezes
-            self.servo.timeout = 1
-            self.servo.write_timeout = 0.1
             time.sleep(2)
             self.servo.reset_input_buffer()
             self.servo.reset_output_buffer()
