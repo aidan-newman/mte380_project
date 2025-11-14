@@ -245,6 +245,8 @@ class BasicPIDController:
         self.setpoint_label.pack()
 
         # motor selection
+        self.curr_motor = tk.IntVar(value=0)
+
         ttk.Label(self.root, text="Select Motor", font=("Arial", 12)).pack()
         for i, name in enumerate(["Motor 0", "Motor 1", "Motor 2"]):
             ttk.Radiobutton(
