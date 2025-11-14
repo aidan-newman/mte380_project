@@ -60,23 +60,36 @@ class BasicPIDController:
 
     def send_servo_angle(self, angle):
         """Send angle command to servo motor (clipped for safety)."""
-        if self.servo:
-            match self.curr_motor:
-                case 0:
-                    print("[SERVO] Using motor 1")
-                    angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "\n"
-                case 1:
-                    print("[SERVO] Using motor 2")
-                    angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "\n"
-                case 2:
-                    print("[SERVO] Using motor 3")
-                    angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "\n"
-            
-            try:
-                self.servo.write(bytes(angle_data, 'utf-8'))
-                print(f"[SERVO] Sent angles: {angle_data}")
-            except Exception as e:
-                print(f"[SERVO] Send failed: {e}")
+        if not self.servo:
+            return
+
+        # Initialize timestamp if not present
+        if not hasattr(self, "_last_servo_write"):
+            self._last_servo_write = 0
+        
+        # Rate limit to ~30 Hz (every 33 ms)
+        now = time.time()
+        if now - self._last_servo_write < 0.033:
+            return
+    
+        self._last_servo_write = now
+        
+        match self.curr_motor:
+            case 0:
+                print("[SERVO] Using motor 1")
+                angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "\n"
+            case 1:
+                print("[SERVO] Using motor 2")
+                angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "\n"
+            case 2:
+                print("[SERVO] Using motor 3")
+                angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "\n"
+        
+        try:
+            self.servo.write(bytes(angle_data, 'utf-8'))
+            print(f"[SERVO] Sent angles: {angle_data}")
+        except Exception as e:
+            print(f"[SERVO] Send failed: {e}")
 
     def update_pid(self, error, dt=0.033):
 
