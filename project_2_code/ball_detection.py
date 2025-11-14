@@ -72,7 +72,7 @@ class BallDetector:
         center_y = self.center_y
         
         normalized_x = (ball_x_pixels - center_x) / center_x
-        normalized_y = (ball_y_pixels - center_y) / center_y
+        normalized_y = (center_y - ball_y_pixels) / center_y
         
         position_m_x = normalized_x * self.scale_factor
         position_m_y = normalized_y * self.scale_factor
