@@ -161,8 +161,8 @@ class BasicPIDController:
         u2 = Vector(x, y)
         
         print("u0: " + str(u0))
-        print("u0: " + str(u1))
-        print("u0: " + str(u2))
+        print("u1: " + str(u1))
+        print("u2: " + str(u2))
 
         self.start_time = time.time()
         while self.running:
@@ -170,31 +170,21 @@ class BasicPIDController:
                 # Wait for latest ball position from camera
                 coords = self.position_queue.get(timeout=0.1)
 
-                print("Coords: " + str(coords))
-
-                print("proj0: " + str(coords.dot(u0)))
-                print("proj1: " + str(coords.dot(u1)))
-                print("proj2: " + str(coords.dot(u2)))
-
                 m0_dist = coords.dot(u0) - self.setpoint
                 m1_dist = coords.dot(u1) - self.setpoint
                 m2_dist = coords.dot(u2) - self.setpoint
-
-                print("m0_dist: " + str(m0_dist))
-                print("m1_dist: " + str(m1_dist))
-                print("m2_dist: " + str(m2_dist))
 
                 # Compute control output using PID
                 control_output = 0
                 match self.curr_motor:
                     case 0:
-                        control_output = self.update_pid(-m0_dist)
+                        control_output = self.update_pid(m0_dist)
                     case 1:
-                        control_output = self.update_pid(-m1_dist)
+                        control_output = self.update_pid(m1_dist)
                     case 2:
-                        control_output = self.update_pid(-m2_dist)
+                        control_output = self.update_pid(m2_dist)
                     case _:
-                        print("ERROR: Invalid motor value (183)")
+                        print("ERROR: Invalid motor value")
 
                 # Send control command to servo (real or simulated)
                 self.send_servo_angle(control_output)
