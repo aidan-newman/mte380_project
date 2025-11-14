@@ -167,17 +167,13 @@ class BasicPIDController:
                 x, y = self.config['motor']['unit_vector_m']["motor2"]
                 u2 = Vector(x, y)
 
-                print(str(u0))
-                print(str(u1))
-                print(str(u2))
-
                 m0_dist = coords.projectu(u0).norm - self.setpoint
                 m1_dist = coords.projectu(u1).norm - self.setpoint
                 m2_dist = coords.projectu(u2).norm - self.setpoint
 
                 print("m0_dist: " + str(m0_dist))
-                print("m1_dist: " + str(m0_dist))
-                print("m2_dist: " + str(m0_dist))
+                print("m1_dist: " + str(m1_dist))
+                print("m2_dist: " + str(m2_dist))
 
                 # Compute control output using PID
                 control_output = 0
