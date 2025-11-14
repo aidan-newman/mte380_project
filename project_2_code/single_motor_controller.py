@@ -61,15 +61,16 @@ class BasicPIDController:
     def send_servo_angle(self, angle):
         """Send angle command to servo motor (clipped for safety)."""
         if self.servo:
-            if self.motor1_enabled:
-                print("[SERVO] Using motor 1")
-                angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "\n"
-            elif self.motor2_enabled:
-                print("[SERVO] Using motor 2")
-                angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "\n"
-            elif self.motor3_enabled:
-                print("[SERVO] Using motor 3")
-                angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "\n"
+            match self.curr_motor:
+                case 0:
+                    print("[SERVO] Using motor 1")
+                    angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "\n"
+                case 1:
+                    print("[SERVO] Using motor 2")
+                    angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "\n"
+                case 2:
+                    print("[SERVO] Using motor 3")
+                    angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "\n"
             
             try:
                 self.servo.write(bytes(angle_data, 'utf-8'))
