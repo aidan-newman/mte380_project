@@ -172,13 +172,13 @@ class BasicPIDController:
 
                 print("Coords: " + str(coords))
 
-                print("proj0: " + str(coords.projectu(u0)))
-                print("proj1: " + str(coords.projectu(u1)))
-                print("proj2: " + str(coords.projectu(u2)))
+                print("proj0: " + str(coords.dot(u0)))
+                print("proj1: " + str(coords.dot(u1)))
+                print("proj2: " + str(coords.dot(u2)))
 
-                m0_dist = coords.projectu(u0).norm - self.setpoint
-                m1_dist = coords.projectu(u1).norm - self.setpoint
-                m2_dist = coords.projectu(u2).norm - self.setpoint
+                m0_dist = coords.dot(u0) - self.setpoint
+                m1_dist = coords.dot(u1) - self.setpoint
+                m2_dist = coords.dot(u2) - self.setpoint
 
                 print("m0_dist: " + str(m0_dist))
                 print("m1_dist: " + str(m1_dist))
