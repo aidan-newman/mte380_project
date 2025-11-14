@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import json
 import serial
+print(serial.__file__)
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -43,16 +44,14 @@ class BasicPIDController:
         self.position_queue = queue.Queue(maxsize=1)
         self.running = False    # Main run flag for clean shutdown
 
-        self.curr_motor = 1 # 0 1 2
+        self.curr_motor = None # 0 1 2
         self.error_multiplier = 100
 
     def connect_servo(self):
         """Try to open serial connection to servo, return True if success."""
         try:
-            self.servo = serial.Serial(self.servo_port, 9600)
+            self.servo = serial.Serial(self.servo_port, 115200)
             time.sleep(2)
-            self.servo.timeout=2
-            self.servo.write_timeout = 1
             print("[SERVO] Connected")
             return True
         except Exception as e:
@@ -76,7 +75,7 @@ class BasicPIDController:
     
         self._last_servo_write = now
         
-        match self.curr_motor:
+        match self.curr_motor.get():
             case 0:
                 angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "\n"
             case 1:
@@ -111,7 +110,7 @@ class BasicPIDController:
         self.prev_error = error
         # PID output (limit to safe beam range)
         output = P + I + D
-        output = np.clip(output, -15, 15)
+        output = np.clip(output, -20, 20)
         return output
 
     def camera_thread(self):
@@ -172,13 +171,14 @@ class BasicPIDController:
                 # Wait for latest ball position from camera
                 coords = self.position_queue.get(timeout=0.1)
 
-                m0_dist = -(coords.dot(u0) - self.setpoint)
-                m1_dist = -(coords.dot(u1) - self.setpoint)
-                m2_dist = -(coords.dot(u2) - self.setpoint)
+                print(f"coords: {coords.dot(u0)}, {coords.dot(u1)}, {coords.dot(u2)}")
+                m0_dist = (coords.dot(u0) - self.setpoint)
+                m1_dist = (coords.dot(u1) - self.setpoint)
+                m2_dist = (coords.dot(u2) - self.setpoint)
 
                 # Compute control output using PID
                 control_output = 0
-                match self.curr_motor:
+                match self.curr_motor.get():
                     case 0:
                         control_output = self.update_pid(m0_dist)
                     case 1:
@@ -256,16 +256,16 @@ class BasicPIDController:
         self.setpoint_label.pack()
 
         # motor selection
-        # self.curr_motor = tk.IntVar(value=0)
+        self.curr_motor = tk.IntVar(value=0)
 
-        # ttk.Label(self.root, text="Select Motor", font=("Arial", 12)).pack()
-        # for i, name in enumerate(["Motor 0", "Motor 1", "Motor 2"]):
-        #     ttk.Radiobutton(
-        #         self.root,
-        #         text=name,
-        #         value=i,
-        #         variable=self.curr_motor
-        #     ).pack(anchor="w")
+        ttk.Label(self.root, text="Select Motor", font=("Arial", 12)).pack()
+        for i, name in enumerate(["Motor 0", "Motor 1", "Motor 2"]):
+            ttk.Radiobutton(
+                self.root,
+                text=name,
+                value=i,
+                variable=self.curr_motor
+            ).pack(anchor="w")
 
         # Button group for actions
         button_frame = ttk.Frame(self.root)
