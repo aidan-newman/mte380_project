@@ -43,7 +43,7 @@ class BasicPIDController:
         self.position_queue = queue.Queue(maxsize=1)
         self.running = False    # Main run flag for clean shutdown
 
-        self.curr_motor = tk.IntVar(value=0) # 0 1 2
+        self.curr_motor = 0 # 0 1 2
 
     def connect_servo(self):
         """Try to open serial connection to servo, return True if success."""
