@@ -57,6 +57,8 @@ class BasicPIDController:
             servo_angle = self.neutral_angle - angle
             servo_angle = int(np.clip(servo_angle, 70, 130))
             try:
+                self.servo.reset_input_buffer()
+                self.servo.reset_output_buffer()
                 self.servo.write(bytes([servo_angle]))
             except Exception:
                 print("[SERVO] Send failed")
