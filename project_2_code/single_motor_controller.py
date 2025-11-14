@@ -74,7 +74,7 @@ class BasicPIDController:
     
         self._last_servo_write = now
         
-        match self.curr_motor:
+        match self.curr_motor.get():
             case 0:
                 print("[SERVO] Using motor 1")
                 angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "\n"
@@ -84,7 +84,9 @@ class BasicPIDController:
             case 2:
                 print("[SERVO] Using motor 3")
                 angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "\n"
-        
+            case _:
+                print("ERROR: Invalid motor value (88)")
+
         try:
             self.servo.write(bytes(angle_data, 'utf-8'))
             print(f"[SERVO] Sent angles: {angle_data}")
