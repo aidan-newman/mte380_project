@@ -76,16 +76,13 @@ class BasicPIDController:
         
         match self.curr_motor:
             case 0:
-                print("[SERVO] Using motor 0")
                 angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "\n"
             case 1:
-                print("[SERVO] Using motor 1")
                 angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "\n"
             case 2:
-                print("[SERVO] Using motor 2")
                 angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "\n"
             case _:
-                print("ERROR: Invalid motor value (88)")
+                print("ERROR: Invalid motor value")
 
         try:
             self.servo.write(bytes(angle_data, 'utf-8'))
@@ -96,12 +93,13 @@ class BasicPIDController:
     def update_pid(self, error, dt=0.033):
 
         """Perform PID calculation and return control output."""
+        error *= 10
+        print("Error Value: " + str(error))
 
         # Proportional term
         P = self.Kp * error
         # Integral term accumulation
         self.integral += error * dt
-        print(f"Integral: {self.integral}")
         # Limit integral term
         self.integral = np.clip(self.integral, -2, 2)
         I = self.Ki * self.integral
@@ -112,7 +110,6 @@ class BasicPIDController:
         # PID output (limit to safe beam range)
         output = P + I + D
         output = np.clip(output, -15, 15)
-        print(error)
         return output
 
     def camera_thread(self):
@@ -170,17 +167,18 @@ class BasicPIDController:
                 m1_dist = coords.projectu(u1).norm - self.setpoint
                 m2_dist = coords.projectu(u2).norm - self.setpoint
 
+                print("m0_dist: " + str(m0_dist))
+                print("m1_dist: " + str(m0_dist))
+                print("m2_dist: " + str(m0_dist))
+
                 # Compute control output using PID
                 control_output = 0
                 match self.curr_motor:
                     case 0:
-                        print("[CONTROL] update motor 0 PID")
                         control_output = self.update_pid(m0_dist)
                     case 1:
-                        print("[CONTROL] update motor 1 PID")
                         control_output = self.update_pid(m1_dist)
                     case 2:
-                        print("[CONTROL] update motor 2 PID")
                         control_output = self.update_pid(m2_dist)
                     case _:
                         print("ERROR: Invalid motor value (183)")
@@ -198,6 +196,7 @@ class BasicPIDController:
             except Exception as e:
                 print(f"[CONTROL] Error: {e}")
                 break
+
         if self.servo:
             # Return to neutral on exit
             self.send_servo_angle(0)
