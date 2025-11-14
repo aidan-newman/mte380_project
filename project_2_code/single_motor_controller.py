@@ -129,7 +129,7 @@ class BasicPIDController:
             x, y = coords
             vec = Vector(x, y)
 
-            print("[CAMERA] Ball detected at: " + str(vec))
+            # print("[CAMERA] Ball detected at: " + str(vec))
 
             if found:
                 # Always keep latest measurement only
