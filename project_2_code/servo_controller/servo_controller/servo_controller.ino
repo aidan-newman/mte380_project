@@ -3,15 +3,16 @@
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
-#define SERVOMIN 100 // Min pulse length count (≈1 ms)
-#define SERVOMAX 570 // Max pulse length count (≈2 ms)
+#define SERVOMIN 100
+#define SERVOMAX 570
 #define NEUTRAL_ANGLE 65
+
 #define MAX_VALUES 3
 #define BUF_SIZE 32
 
-int values[MAX_VALUES];
 char input_buf[BUF_SIZE];
 int buf_idx = 0;
+int values[MAX_VALUES];
 
 void moveServo(int motor, int angle) {
   angle = constrain(angle, 30, 100);
@@ -19,70 +20,58 @@ void moveServo(int motor, int angle) {
   pwm.setPWM(motor, 0, pulselen);
 }
 
-void parseInput(char *buf) {
+void parseLine() {
+  input_buf[buf_idx] = '\0';      // Null-terminate the string
+  buf_idx = 0;                    // Reset for next line
+
   int numValues = 0;
-  char *token = strtok(buf, ",");
-  while (token != NULL && numValues < MAX_VALUES) {
+  char *token = strtok(input_buf, ",");
+
+  while (token && numValues < MAX_VALUES) {
     values[numValues++] = atoi(token);
     token = strtok(NULL, ",");
   }
 
-  // Apply servo movement only if all values received
   if (numValues == MAX_VALUES) {
     moveServo(0, values[0]);
     moveServo(1, values[1]);
     moveServo(2, values[2]);
+    Serial.println("OK");
+  } else {
+    Serial.println("BAD");
   }
-
-  // Optional: send ACK back to Python
-  Serial.println("OK");
 }
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   pwm.begin();
   pwm.setPWMFreq(50);
 
-  // Initialize servos to neutral
   moveServo(0, NEUTRAL_ANGLE);
   moveServo(1, NEUTRAL_ANGLE);
   moveServo(2, NEUTRAL_ANGLE);
 }
 
 void loop() {
-  int angles[3];
-  int angle1 = NEUTRAL_ANGLE;
-  int angle2 = NEUTRAL_ANGLE;
-  int angle3 = NEUTRAL_ANGLE;
+  while (Serial.available() > 0) {
 
-  if (Serial.available()) {
-    String input = Serial.readStringUntil('\n');  // Read until newline
-    numValues = 0;
+    char c = Serial.read();
 
-    // Split by commas
-    char buf[input.length() + 1];
-    input.toCharArray(buf, sizeof(buf));
-    char *token = strtok(buf, ",");
-    while (token != NULL && numValues < MAX_VALUES) {
-      values[numValues++] = atoi(token);
-      token = strtok(NULL, ",");
+    // Ignore carriage returns
+    if (c == '\r') continue;
+
+    // Line complete
+    if (c == '\n') {
+      parseLine();
+      continue;
+    }
+
+    // Add to buffer safely
+    if (buf_idx < BUF_SIZE - 1) {
+      input_buf[buf_idx++] = c;
+    } else {
+      // Overflow → reset to avoid partial garbage
+      buf_idx = 0;
     }
   }
-
-    // Print what we got
-    Serial.print("Received ");
-    Serial.print(numValues);
-    Serial.println(" values:");
-    for (int i = 0; i < numValues; i++) {
-      Serial.println(values[i]);
-  }
-
-
-  if(values[0] && values[1] && values[2]) {
-    moveServo(0, values[0]);
-    moveServo(1, values[1]);
-    moveServo(2, values[2]);
-  }
-
-  delay(1);
 }
