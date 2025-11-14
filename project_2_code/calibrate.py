@@ -16,7 +16,6 @@ class Calibrator:
         self.circle_radius = None
         self.drawing_circle = False
         self.motor_points = [] # Selected motor points
-        self.motor_angles = {} # Motor angles dictionary
 
         # camera settings
         self.CAMERA_INDEX = 0 # Default camera index
@@ -108,7 +107,7 @@ class Calibrator:
             
             print(f"[COLOR] Samples: {len(self.hsv_samples)}")
 
-    def get_ball_polar_position(self, ball_x, ball_y):
+    def get_ball_position(self, ball_x, ball_y):
         """Compute distance (m) and angle (deg) of ball relative to circle center."""
         if self.circle_center is None or self.pixel_to_meter_ratio is None:
             return None, None
@@ -120,14 +119,30 @@ class Calibrator:
         dx_m = dx_pixels * self.pixel_to_meter_ratio
         dy_m = dy_pixels * self.pixel_to_meter_ratio
 
-        # Distance from center
-        distance = math.sqrt(dx_m**2 + dy_m**2)
+        return dx_m, dy_m
+    
+    def get_motor_unit_vectors(self):
+        """Compute unit vectors from circle center to motor points in meters."""
+        if self.circle_center is None or self.pixel_to_meter_ratio is None:
+            return None
 
-        # Angle relative to positive x-axis (to the right)
-        angle_rad = math.atan2(dy_m, dx_m)
-        angle_deg = math.degrees(angle_rad)
+        unit_vectors = []
+        cx, cy = self.circle_center
 
-        return distance, angle_deg
+        for (mx, my) in self.motor_points:
+            dx_pixels = mx - cx
+            dy_pixels = cy - my # Invert y-axis
+
+            # Convert to meters
+            dx_m = dx_pixels * self.pixel_to_meter_ratio
+            dy_m = dy_pixels * self.pixel_to_meter_ratio
+
+            norm = math.sqrt(dx_m**2 + dy_m**2)
+            unit_vector = (dx_m / norm, dy_m / norm)
+
+            unit_vectors.append(unit_vector)
+
+        return unit_vectors
 
     def draw_overlay(self, frame):
         """Draw calibration status and instructions overlay on frame."""
@@ -160,30 +175,31 @@ class Calibrator:
             cv2.putText(overlay, f"Center: ({cx}, {cy})", (cx + 10, cy - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
-
+        # Draw motor points and lines
         if self.motor_points and len(self.motor_points) > 0:
-            
             for i, (mx, my) in enumerate(self.motor_points, start=1):
+
                 # Draw motor point dot
                 cv2.circle(overlay, (int(mx), int(my)), 5, (0, 255, 255), -1)
 
                 # Draw line to circle center
                 if self.circle_center:
-                    cv2.line(overlay, (int(mx), int(my)), (cx, cy), (255, 0, 0), 2)
 
-                    # Compute distance and angle
                     if self.pixel_to_meter_ratio:
+                        cx, cy = int(self.circle_center[0]), int(self.circle_center[1])
                         dx_m = (mx - cx) * self.pixel_to_meter_ratio
                         dy_m = (cy - my) * self.pixel_to_meter_ratio
-                        distance = (dx_m**2 + dy_m**2)**0.5
-                        angle_deg = np.degrees(np.arctan2(dy_m, dx_m))
-                        self.motor_angles[f"motor{i}"] = angle_deg
 
+                        mx, my = int(mx), int(my)
+
+
+                        cv2.line(overlay, (int(mx), int(my)), (cx, cy), (255, 0, 0), 2)
                         # Display info near motor point
-                        cv2.putText(overlay, f"M{i}: {distance:.3f} m", (int(mx)+10, int(my)-20),
+                        cv2.putText(overlay, f"M{i}: X: {dx_m:.3f} m", (int(mx)+10, int(my)-20),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-                        cv2.putText(overlay, f"θ: {angle_deg:.1f}°", (int(mx)+10, int(my)-5),
+                        cv2.putText(overlay, f"Y: {dy_m:.3f} m", (int(mx)+10, int(my)-5),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                
                     
         # Detect ball if color calibration is done
         self.ball_position = None
@@ -215,11 +231,11 @@ class Calibrator:
                         cv2.putText(overlay, f"y: {dy_m:.3f} m", (int(x)+10, int(y)-5),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
-                        distance, angle_deg = self.get_ball_polar_position(x, y)
-                        if distance is not None:
-                            cv2.putText(overlay, f"Dist: {distance:.3f} m", (10, 120),
+                        ball_x, ball_y = self.get_ball_position(x, y)
+                        if ball_x is not None and ball_y is not None:
+                            cv2.putText(overlay, f"X: {ball_x:.3f} m", (10, 120),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-                            cv2.putText(overlay, f"Angle: {angle_deg:.1f} deg", (10, 140),
+                            cv2.putText(overlay, f"Y: {ball_y:.3f} m", (10, 140),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
 
         return overlay
@@ -250,15 +266,15 @@ class Calibrator:
                 "neutral_angle": int(self.neutral_angle)
             },
             "motor": {
-                "motor_points": {
-                    "motor1": [int(x) for x in self.motor_points[0]] if len(self.motor_points) > 0 else None,
-                    "motor2": [int(x) for x in self.motor_points[1]] if len(self.motor_points) > 1 else None,
-                    "motor3": [int(x) for x in self.motor_points[2]] if len(self.motor_points) > 2 else None        
+                "pixels": {
+                    "motor0": [float(x) for x in self.motor_points[0]] if len(self.motor_points) > 0 else None,
+                    "motor1": [float(x) for x in self.motor_points[1]] if len(self.motor_points) > 1 else None,
+                    "motor2": [float(x) for x in self.motor_points[2]] if len(self.motor_points) > 2 else None        
                 },
-                "motor_angles": {
-                    "motor1": self.motor_angles.get("motor1", None),
-                    "motor2": self.motor_angles.get("motor2", None),
-                    "motor3": self.motor_angles.get("motor3", None)
+                "unit_vector_m": {
+                    "motor0": self.motor_unit_vectors[0] if self.motor_unit_vectors and len(self.motor_unit_vectors) > 0 else None,
+                    "motor1": self.motor_unit_vectors[1] if self.motor_unit_vectors and len(self.motor_unit_vectors) > 1 else None,
+                    "motor2": self.motor_unit_vectors[2] if self.motor_unit_vectors and len(self.motor_unit_vectors) > 2 else None        
                 }
             }
         }
@@ -317,6 +333,7 @@ class Calibrator:
                     self.phase = "motor_select"
             elif key == ord('m') and self.phase == "motor_select":
                 if len(self.motor_points) == 3:
+                    self.motor_unit_vectors = self.get_motor_unit_vectors()
                     self.phase = "complete"
                     print("[INFO] Motor selection complete. Calibration finished.")
             elif key == ord('s') and self.phase == "complete":
@@ -327,8 +344,6 @@ class Calibrator:
         # Clean up resources
         self.cap.release()
         cv2.destroyAllWindows()
-        if self.servo:
-            self.servo.close()
 
 if __name__ == "__main__":
     """Run calibration when script is executed directly."""
