@@ -156,6 +156,8 @@ class BasicPIDController:
                 # Wait for latest ball position from camera
                 coords = self.position_queue.get(timeout=0.1)
 
+                print("Coords: " + str(coords))
+
                 x, y = self.config['motor']['unit_vector_m']["motor0"]
                 u0 = Vector(x, y)
                 x, y = self.config['motor']['unit_vector_m']["motor1"]
