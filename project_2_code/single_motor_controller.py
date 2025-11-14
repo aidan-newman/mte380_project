@@ -80,10 +80,10 @@ class BasicPIDController:
                 angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "\n"
             case 1:
                 print("[SERVO] Using motor 2")
-                angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "\n"
+                angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "\n"
             case 2:
                 print("[SERVO] Using motor 3")
-                angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "\n"
+                angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "\n"
             case _:
                 print("ERROR: Invalid motor value (88)")
 
