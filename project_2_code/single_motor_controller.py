@@ -152,6 +152,18 @@ class BasicPIDController:
         """Runs PID control loop in parallel with GUI and camera."""
         if not self.connect_servo():
             print("[ERROR] No servo - running in simulation mode")
+        
+        x, y = self.config['motor']['unit_vector_m']["motor0"]
+        u0 = Vector(x, y)
+        x, y = self.config['motor']['unit_vector_m']["motor1"]
+        u1 = Vector(x, y)
+        x, y = self.config['motor']['unit_vector_m']["motor2"]
+        u2 = Vector(x, y)
+        
+        print("u0: " + str(u0))
+        print("u0: " + str(u1))
+        print("u0: " + str(u2))
+
         self.start_time = time.time()
         while self.running:
             try:
@@ -160,12 +172,9 @@ class BasicPIDController:
 
                 print("Coords: " + str(coords))
 
-                x, y = self.config['motor']['unit_vector_m']["motor0"]
-                u0 = Vector(x, y)
-                x, y = self.config['motor']['unit_vector_m']["motor1"]
-                u1 = Vector(x, y)
-                x, y = self.config['motor']['unit_vector_m']["motor2"]
-                u2 = Vector(x, y)
+                print("proj0: " + str(coords.projectu(u0)))
+                print("proj1: " + str(coords.projectu(u1)))
+                print("proj2: " + str(coords.projectu(u2)))
 
                 m0_dist = coords.projectu(u0).norm - self.setpoint
                 m1_dist = coords.projectu(u1).norm - self.setpoint
