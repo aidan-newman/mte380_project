@@ -53,8 +53,6 @@ class BasicPIDController:
             time.sleep(2)
             self.servo.timeout=2
             self.servo.write_timeout = 1
-            self.servo.reset_input_buffer()
-            self.servo.reset_output_buffer()
             print("[SERVO] Connected")
             return True
         except Exception as e:
