@@ -44,6 +44,7 @@ class BasicPIDController:
         self.running = False    # Main run flag for clean shutdown
 
         self.curr_motor = 1 # 0 1 2
+        self.error_multiplier = 100
 
     def connect_servo(self):
         """Try to open serial connection to servo, return True if success."""
@@ -93,7 +94,7 @@ class BasicPIDController:
     def update_pid(self, error, dt=0.033):
 
         """Perform PID calculation and return control output."""
-        error *= 10
+        error *= self.error_multiplier
         print("Error Value: " + str(error))
 
         # Proportional term
