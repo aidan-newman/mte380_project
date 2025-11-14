@@ -8,6 +8,7 @@ from tkinter import ttk
 import matplotlib.pyplot as plt
 from threading import Thread
 import queue
+from vector import Vector
 from ball_detection import BallDetector
 
 class BasicPIDController:
@@ -42,15 +43,7 @@ class BasicPIDController:
         self.position_queue = queue.Queue(maxsize=1)
         self.running = False    # Main run flag for clean shutdown
 
-        self.motor1_angle = self.config['motor']['motor_angles'].get('motor1', 0)
-        self.motor2_angle = self.config['motor']['motor_angles'].get('motor2', 0)
-        self.motor3_angle = self.config['motor']['motor_angles'].get('motor3', 0)
-
-        self.motor1_enabled = False
-        self.motor2_enabled = False
-        self.motor3_enabled = True
-
-
+        self.curr_motor = 0 # 0 1 2
 
     def connect_servo(self):
         """Try to open serial connection to servo, return True if success."""
@@ -66,59 +59,28 @@ class BasicPIDController:
             return False
 
     def send_servo_angle(self, angle):
-        """Send angle command to servo motor (clipped for safety) with rate limiting."""
-        if not self.servo:
-            return
+        """Send angle command to servo motor (clipped for safety)."""
+        if self.servo:
+            if self.motor1_enabled:
+                print("[SERVO] Using motor 1")
+                angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "\n"
+            elif self.motor2_enabled:
+                print("[SERVO] Using motor 2")
+                angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "\n"
+            elif self.motor3_enabled:
+                print("[SERVO] Using motor 3")
+                angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "\n"
+            
+            try:
+                self.servo.write(bytes(angle_data, 'utf-8'))
+                print(f"[SERVO] Sent angles: {angle_data}")
+            except Exception as e:
+                print(f"[SERVO] Send failed: {e}")
 
-        # Initialize timestamp if not present
-        if not hasattr(self, "_last_servo_write"):
-            self._last_servo_write = 0
-        
-        # Rate limit to ~30 Hz (every 33 ms)
-        now = time.time()
-        if now - self._last_servo_write < 0.033:
-            return
-        self._last_servo_write = now
+    def update_pid(self, error, dt=0.033):
 
-        # Build command
-        if self.motor1_enabled:
-            print("[SERVO] Using motor 1")
-            angle_data = (
-                f"{int(self.neutral_angle - angle)},"
-                f"{int(self.neutral_angle)},"
-                f"{int(self.neutral_angle)}\n"
-            )
-
-        elif self.motor2_enabled:
-            print("[SERVO] Using motor 2")
-            angle_data = (
-                f"{int(self.neutral_angle)},"
-                f"{int(self.neutral_angle - angle)},"
-                f"{int(self.neutral_angle)}\n"
-            )
-
-        elif self.motor3_enabled:
-            print("[SERVO] Using motor 3")
-            angle_data = (
-                f"{int(self.neutral_angle)},"
-                f"{int(self.neutral_angle)},"
-                f"{int(self.neutral_angle - angle)}\n"
-            )
-        else:
-            return
-
-        # Send safely
-        try:
-            self.servo.write(angle_data.encode("utf-8"))
-            print(f"[SERVO] Sent angles: {angle_data.strip()}")
-        except Exception as e:
-            print(f"[SERVO] Send failed: {e}")
-
-
-    def update_pid(self, position, dt=0.033):
         """Perform PID calculation and return control output."""
-        error = self.setpoint - position  # Compute error
-        error = error * 10  # Scale error for easier tuning (if needed)
+
         # Proportional term
         P = self.Kp * error
         # Integral term accumulation
@@ -149,17 +111,17 @@ class BasicPIDController:
                 continue
 
             # Detect ball position in frame
-            found, ball_center, ball_radius, cyl_coords = self.ball_detector.detect_ball(frame)
+            found, ball_center, ball_radius, coords = self.ball_detector.detect_ball(frame)
             vis_frame = self.ball_detector.draw_detection(frame)
-            r, theta = cyl_coords
-            theta = np.degrees(theta)
+            x, y = coords
+            vec = Vector(x, y)
 
             if found:
                 # Always keep latest measurement only
                 try:
                     if self.position_queue.full():
                         self.position_queue.get_nowait()
-                    self.position_queue.put_nowait((r, theta))
+                    self.position_queue.put_nowait(vec)
                 except Exception:
                     pass
             # Show processed video with overlays
@@ -170,16 +132,6 @@ class BasicPIDController:
         cap.release()
         cv2.destroyAllWindows()
 
-    def angles_equal(self, a1, a2, tol_deg=10):
-        """Return True if angles a1 and a2 are approximately equal (degrees)."""
-        diff = abs((a1 - a2 + 180) % 360 - 180)  # wraparound-safe difference
-
-        if diff <= tol_deg:
-            return "true"
-        elif abs(diff - 180) <= tol_deg:
-            return "complementary"
-        else:
-            return "none"
 
     def control_thread(self):
         """Runs PID control loop in parallel with GUI and camera."""
@@ -189,61 +141,37 @@ class BasicPIDController:
         while self.running:
             try:
                 # Wait for latest ball position from camera
-                cyl_coords = self.position_queue.get(timeout=0.1)
-                r, theta = cyl_coords
-                position = 0
+                coords = self.position_queue.get(timeout=0.1)
 
-                if self.angles_equal(self.motor1_angle, theta) == "true" and self.motor1_enabled:
-                    print("[CONTROL] Using motor 1 angle")
-                    position = -r
-                    # self.motor1_enabled = True
-                    # self.motor2_enabled = False
-                    # self.motor3_enabled = False
-                elif self.angles_equal(self.motor1_angle, theta) == "complementary" and self.motor1_enabled:
-                    print("[CONTROL] Using motor 1 complementary angle")
-                    position = r
-                    # self.motor1_enabled = True
-                    # self.motor2_enabled = False
-                    # self.motor3_enabled = False
-                elif self.angles_equal(self.motor2_angle, theta) == "true" and self.motor2_enabled:
-                    print("[CONTROL] Using motor 2 angle")
-                    position = -r
-                    # self.motor1_enabled = False
-                    # self.motor2_enabled = True
-                    # self.motor3_enabled = False
-                elif self.angles_equal(self.motor2_angle, theta) == "complementary" and self.motor2_enabled:
-                    print("[CONTROL] Using motor 2 complementary angle")
-                    position = r
-                    # self.motor1_enabled = False
-                    # self.motor2_enabled = True
-                    # self.motor3_enabled = False
-                elif self.angles_equal(self.motor3_angle, theta) == "true" and self.motor3_enabled:
-                    print("[CONTROL] Using motor 3 angle")
-                    position = r
-                    # self.motor1_enabled = False
-                    # self.motor2_enabled = False
-                    # self.motor3_enabled = True
-                elif self.angles_equal(self.motor3_angle, theta) == "complementary" and self.motor3_enabled:
-                    print("[CONTROL] Using motor 3 complementary angle")
-                    position = -r
-                    # self.motor1_enabled = False
-                    # self.motor2_enabled = False
-                    # self.motor3_enabled = True
+                x, y = self.config['motor']['unit_vector_m']["motor0"]
+                u0 = Vector(x, y)
+                x, y = self.config['motor']['unit_vector_m']["motor1"]
+                u1 = Vector(x, y)
+                x, y = self.config['motor']['unit_vector_m']["motor2"]
+                u2 = Vector(x, y)
 
-                print(f"[CONTROL] r: {r:.4f} m, θ: {theta:.2f}°")
+                m0_dist = coords.projectu(u0).norm - self.setpoint
+                m1_dist = coords.projectu(u1).norm - self.setpoint
+                m2_dist = coords.projectu(u2).norm - self.setpoint
+
                 # Compute control output using PID
-                control_output = self.update_pid(position)
-                print(f"[CONTROL] Control output: {control_output:.2f}°")
-                print(self.motor1_enabled, self.motor2_enabled, self.motor3_enabled)
+                control_output = 0
+                match self.curr_motor:
+                    case 0:
+                        control_output = self.update_pid(m0_dist)
+                    case 1:
+                        control_output = self.update_pid(m1_dist)
+                    case 2:
+                        control_output = self.update_pid(m2_dist)
+
                 # Send control command to servo (real or simulated)
                 self.send_servo_angle(control_output)
+
                 # Log results for plotting
                 current_time = time.time() - self.start_time
                 self.time_log.append(current_time)
-                self.position_log.append(position)
                 self.setpoint_log.append(self.setpoint)
                 self.control_log.append(control_output)
-                print(f"Pos: {position:.3f}m, Output: {control_output:.1f}°")
             except queue.Empty:
                 continue
             except Exception as e:
@@ -301,6 +229,11 @@ class BasicPIDController:
         setpoint_slider.pack(pady=5)
         self.setpoint_label = ttk.Label(self.root, text=f"Setpoint: {self.setpoint:.3f}m", font=("Arial", 11))
         self.setpoint_label.pack()
+
+        # motor selection
+        ttk.Label(self.root, text="Select Motor", font=("Arial", 12)).pack()
+        for name in ["Motor 0", "Motor 1", "Motor 2"]:
+            ttk.Radiobutton(self.root, text=name, value=name, variable=self.curr_motor).pack(anchor="w")
 
         # Button group for actions
         button_frame = ttk.Frame(self.root)
