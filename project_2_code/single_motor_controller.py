@@ -170,9 +170,9 @@ class BasicPIDController:
                 # Wait for latest ball position from camera
                 coords = self.position_queue.get(timeout=0.1)
 
-                m0_dist = coords.dot(u0) - self.setpoint
-                m1_dist = coords.dot(u1) - self.setpoint
-                m2_dist = coords.dot(u2) - self.setpoint
+                m0_dist = -(coords.dot(u0) - self.setpoint)
+                m1_dist = -(coords.dot(u1) - self.setpoint)
+                m2_dist = -(coords.dot(u2) - self.setpoint)
 
                 # Compute control output using PID
                 control_output = 0
