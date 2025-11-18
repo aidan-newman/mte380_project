@@ -20,9 +20,9 @@ class BasicPIDController:
         with open(config_file, 'r') as f:
             self.config = json.load(f)
         # PID gains (controlled by sliders in GUI)
-        self.Kp = [2.0, 2.0, 2.0]
-        self.Ki = [1.5, 1.5, 1.5]
-        self.Kd = [1.0, 1.0, 1.0]
+        self.Kps = [2.0, 2.0, 2.0]
+        self.Kis = [1.5, 1.5, 1.5]
+        self.Kds = [1.0, 1.0, 1.0]
         # Scale factor for converting from pixels to meters
         self.scale_factor = self.config['calibration']['pixel_to_meter_ratio'] * self.config['camera']['frame_width'] / 2
         # Servo port name and center angle
@@ -99,10 +99,10 @@ class BasicPIDController:
             self.integrals[i] += error * dt
             # Limit integral term
             self.integrals[i] = np.clip(self.integral, -10, 10)
-            I = self.Ki[i] * self.integral
+            I = self.Kis[i] * self.integral
             # Derivative term calculation
             derivative = (error - self.prev_errors[i]) / dt
-            D = self.Kd[i] * derivative
+            D = self.Kds[i] * derivative
             self.prev_errors[i] = error
             # PID output (limit to safe beam range)
             output = P + I + D
