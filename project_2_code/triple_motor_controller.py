@@ -98,8 +98,8 @@ class BasicPIDController:
             # Integral term accumulation
             self.integrals[i] += error * dt
             # Limit integral term
-            self.integrals[i] = np.clip(self.integral, -10, 10)
-            I = self.Kis[i] * self.integral
+            self.integrals[i] = np.clip(self.integrals[i], -10, 10)
+            I = self.Kis[i] * self.integrals[i]
             # Derivative term calculation
             derivative = (error - self.prev_errors[i]) / dt
             D = self.Kds[i] * derivative
@@ -234,7 +234,7 @@ class BasicPIDController:
 
     def reset_integral(self):
         """Clear integral error in PID (button handler)."""
-        self.integral = 0.0
+        self.integrals = [0.0, 0.0, 0.0]
         print("[RESET] Integral term reset")
 
     def plot_results(self):
