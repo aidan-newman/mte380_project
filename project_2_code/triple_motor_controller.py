@@ -35,7 +35,8 @@ class BasicPIDController:
         self.neutral_angle = self.config['servo']['neutral_angle']
         self.servo = None
         # Controller-internal state
-        self.setpoint = 0.0
+        self.setpoint_x = 0.0
+        self.setpoint_y = 0.0
         self.integrals = [0.0, 0.0, 0.0]
         self.prev_errors = [0.0, 0.0, 0.0]
         # Data logs for plotting results
@@ -179,7 +180,7 @@ class BasicPIDController:
                 # Log results for plotting
                 current_time = time.time() - self.start_time
                 self.time_log.append(current_time)
-                self.setpoint_log.append(self.setpoint)
+                self.setpoint_log.append((self.setpoint_x, self.setpoint_y))
                 self.control_log.append(control_outputs)
             except queue.Empty:
                 continue
@@ -241,7 +242,7 @@ class BasicPIDController:
                                    variable=self.setpoint_var_x,
                                    orient=tk.HORIZONTAL, length=500)
         setpoint_slider.pack(pady=5)
-        self.setpoint_label_x = ttk.Label(self.root, text=f"Setpoint: {self.setpoint:.3f}m", font=("Arial", 11))
+        self.setpoint_label_x = ttk.Label(self.root, text=f"Setpoint: {self.setpoint_x:.3f}m", font=("Arial", 11))
         self.setpoint_label_x.pack()
 
         # Setpoint slider y
@@ -253,7 +254,7 @@ class BasicPIDController:
                                    variable=self.setpoint_var_y,
                                    orient=tk.HORIZONTAL, length=500)
         setpoint_slider.pack(pady=5)
-        self.setpoint_label_y = ttk.Label(self.root, text=f"Setpoint: {self.setpoint:.3f}m", font=("Arial", 11))
+        self.setpoint_label_y = ttk.Label(self.root, text=f"Setpoint: {self.setpoint_y:.3f}m", font=("Arial", 11))
         self.setpoint_label_y.pack()
 
 
