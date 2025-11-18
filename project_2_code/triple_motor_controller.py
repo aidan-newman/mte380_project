@@ -188,13 +188,14 @@ class BasicPIDController:
             self.servo.close()
 
     def create_gui(self):
-        # """Build Tkinter GUI with large sliders and labeled controls."""
-        self.root = tk.Tk()
-        self.root.title("Basic PID Controller")
-        self.root.geometry("520x400")
+        pass
+        # # """Build Tkinter GUI with large sliders and labeled controls."""
+        # self.root = tk.Tk()
+        # self.root.title("Basic PID Controller")
+        # self.root.geometry("520x400")
 
-        # Title label
-        ttk.Label(self.root, text="PID Gains", font=("Arial", 18, "bold")).pack(pady=10)
+        # # Title label
+        # ttk.Label(self.root, text="PID Gains", font=("Arial", 18, "bold")).pack(pady=10)
 
         # # Kp slider
         # ttk.Label(self.root, text="Kp (Proportional)", font=("Arial", 12)).pack()
@@ -223,47 +224,35 @@ class BasicPIDController:
         # self.kd_label = ttk.Label(self.root, text=f"Kd: {self.Kd:.1f}", font=("Arial", 11))
         # self.kd_label.pack()
 
-        # Setpoint slider
-        ttk.Label(self.root, text="Setpoint (meters)", font=("Arial", 12)).pack()
-        pos_min = self.config['calibration']['position_min_m']
-        pos_max = self.config['calibration']['position_max_m']
-        self.setpoint_var = tk.DoubleVar(value=self.setpoint)
-        setpoint_slider = ttk.Scale(self.root, from_=pos_min, to=pos_max,
-                                   variable=self.setpoint_var,
-                                   orient=tk.HORIZONTAL, length=500)
-        setpoint_slider.pack(pady=5)
-        self.setpoint_label = ttk.Label(self.root, text=f"Setpoint: {self.setpoint:.3f}m", font=("Arial", 11))
-        self.setpoint_label.pack()
+        # # Setpoint slider
+        # ttk.Label(self.root, text="Setpoint (meters)", font=("Arial", 12)).pack()
+        # pos_min = self.config['calibration']['position_min_m']
+        # pos_max = self.config['calibration']['position_max_m']
+        # self.setpoint_var = tk.DoubleVar(value=self.setpoint)
+        # setpoint_slider = ttk.Scale(self.root, from_=pos_min, to=pos_max,
+        #                            variable=self.setpoint_var,
+        #                            orient=tk.HORIZONTAL, length=500)
+        # setpoint_slider.pack(pady=5)
+        # self.setpoint_label = ttk.Label(self.root, text=f"Setpoint: {self.setpoint:.3f}m", font=("Arial", 11))
+        # self.setpoint_label.pack()
 
-        # motor selection
-        self.curr_motor = tk.IntVar(value=0)
-
-        ttk.Label(self.root, text="Select Motor", font=("Arial", 12)).pack()
-        for i, name in enumerate(["Motor 0", "Motor 1", "Motor 2"]):
-            ttk.Radiobutton(
-                self.root,
-                text=name,
-                value=i,
-                variable=self.curr_motor
-            ).pack(anchor="w")
-
-        # Button group for actions
-        button_frame = ttk.Frame(self.root)
-        button_frame.pack(pady=20)
-        ttk.Button(button_frame, text="Reset Integral",
-                   command=self.reset_integral).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Plot Results",
-                   command=self.plot_results).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Stop",
-                   command=self.stop).pack(side=tk.LEFT, padx=5)
+        # # Button group for actions
+        # button_frame = ttk.Frame(self.root)
+        # button_frame.pack(pady=20)
+        # ttk.Button(button_frame, text="Reset Integral",
+        #            command=self.reset_integral).pack(side=tk.LEFT, padx=5)
+        # ttk.Button(button_frame, text="Plot Results",
+        #            command=self.plot_results).pack(side=tk.LEFT, padx=5)
+        # ttk.Button(button_frame, text="Stop",
+        #            command=self.stop).pack(side=tk.LEFT, padx=5)
 
         # Schedule periodic GUI update
         # self.update_gui()
 
     def update_gui(self):
-        """Reflect latest values from sliders into program and update display."""
-        if self.running:
-            pass
+        pass
+        # """Reflect latest values from sliders into program and update display."""
+        # if self.running:
             # # PID parameters
             # self.Kp = self.kp_var.get()
             # self.Ki = self.ki_var.get()
@@ -307,14 +296,15 @@ class BasicPIDController:
         plt.show()
 
     def stop(self):
-        """Stop everything and clean up threads and GUI."""
-        self.running = False
-        # Try to safely close all windows/resources
-        try:
-            self.root.quit()
-            self.root.destroy()
-        except Exception:
-            pass
+        pass
+        # """Stop everything and clean up threads and GUI."""
+        # self.running = False
+        # # Try to safely close all windows/resources
+        # try:
+        #     self.root.quit()
+        #     self.root.destroy()
+        # except Exception:
+        #     pass
 
     def run(self):
         """Entry point: starts threads, launches GUI mainloop."""
@@ -331,7 +321,7 @@ class BasicPIDController:
 
         # Build and run GUI in main thread
         # self.create_gui()
-        self.root.mainloop()
+        # self.root.mainloop()
 
         # After GUI ends, stop everything
         self.running = False
