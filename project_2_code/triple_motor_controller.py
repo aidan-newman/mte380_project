@@ -208,28 +208,28 @@ class BasicPIDController:
         # Kp slider
         ttk.Label(self.root, text="Kp (Proportional)", font=("Arial", 12)).pack()
         self.kp_var = tk.DoubleVar(value=self.Kp)
-        kp_slider = ttk.Scale(self.root, from_=0, to=10, variable=self.kp_var,
+        kp_slider = ttk.Scale(self.root, from_=0, to=2.5, variable=self.kp_var,
                               orient=tk.HORIZONTAL, length=500)
         kp_slider.pack(pady=5)
-        self.kp_label = ttk.Label(self.root, text=f"Kp: {self.Kp:.1f}", font=("Arial", 11))
+        self.kp_label = ttk.Label(self.root, text=f"Kp: {self.Kp:.4f}", font=("Arial", 11))
         self.kp_label.pack()
 
         # Ki slider
         ttk.Label(self.root, text="Ki (Integral)", font=("Arial", 12)).pack()
         self.ki_var = tk.DoubleVar(value=self.Ki)
-        ki_slider = ttk.Scale(self.root, from_=0, to=10, variable=self.ki_var,
+        ki_slider = ttk.Scale(self.root, from_=0, to=2.5, variable=self.ki_var,
                               orient=tk.HORIZONTAL, length=500)
         ki_slider.pack(pady=5)
-        self.ki_label = ttk.Label(self.root, text=f"Ki: {self.Ki:.1f}", font=("Arial", 11))
+        self.ki_label = ttk.Label(self.root, text=f"Ki: {self.Ki:.4f}", font=("Arial", 11))
         self.ki_label.pack()
 
         # Kd slider
         ttk.Label(self.root, text="Kd (Derivative)", font=("Arial", 12)).pack()
         self.kd_var = tk.DoubleVar(value=self.Kd)
-        kd_slider = ttk.Scale(self.root, from_=0, to=10, variable=self.kd_var,
+        kd_slider = ttk.Scale(self.root, from_=0, to=2.5, variable=self.kd_var,
                               orient=tk.HORIZONTAL, length=500)
         kd_slider.pack(pady=5)
-        self.kd_label = ttk.Label(self.root, text=f"Kd: {self.Kd:.1f}", font=("Arial", 11))
+        self.kd_label = ttk.Label(self.root, text=f"Kd: {self.Kd:.4f}", font=("Arial", 11))
         self.kd_label.pack()
 
         # Setpoint slider x
@@ -285,9 +285,9 @@ class BasicPIDController:
             self.setpoint_x = self.setpoint_var_x.get()
             self.setpoint_y = self.setpoint_var_y.get()
             # Update displayed values
-            self.kp_label.config(text=f"Kp: {self.Kp:.1f}")
-            self.ki_label.config(text=f"Ki: {self.Ki:.1f}")
-            self.kd_label.config(text=f"Kd: {self.Kd:.1f}")
+            self.kp_label.config(text=f"Kp: {self.Kp:.4f}")
+            self.ki_label.config(text=f"Ki: {self.Ki:.4f}")
+            self.kd_label.config(text=f"Kd: {self.Kd:.4f}")
             self.setpoint_label_x.config(text=f"Setpoint_x: {self.setpoint_x:.3f}m")
             self.setpoint_label_y.config(text=f"Setpoint_y: {self.setpoint_y:.3f}m")
             # Call again after 50 ms (if not stopped)
