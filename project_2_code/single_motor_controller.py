@@ -9,7 +9,6 @@ from tkinter import ttk
 import matplotlib.pyplot as plt
 from threading import Thread
 import queue
-from vector import Vector
 from ball_detection import BallDetector
 
 class BasicPIDController:
@@ -127,8 +126,6 @@ class BasicPIDController:
             # Detect ball position in frame
             found, ball_center, ball_radius, coords = self.ball_detector.detect_ball(frame)
             vis_frame = self.ball_detector.draw_detection(frame)
-            x, y = coords
-            vec = Vector(x, y)
 
             # print("[CAMERA] Ball detected at: " + str(vec))
 
@@ -137,7 +134,7 @@ class BasicPIDController:
                 try:
                     if self.position_queue.full():
                         self.position_queue.get_nowait()
-                    self.position_queue.put_nowait(vec)
+                    self.position_queue.put_nowait(coords)
                 except Exception:
                     pass
             # Show processed video with overlays
@@ -155,11 +152,11 @@ class BasicPIDController:
             print("[ERROR] No servo - running in simulation mode")
         
         x, y = self.config['motor']['unit_vector_m']["motor0"]
-        u0 = Vector(x, y)
+        u0 = (x, y)
         x, y = self.config['motor']['unit_vector_m']["motor1"]
-        u1 = Vector(x, y)
+        u1 = (x, y)
         x, y = self.config['motor']['unit_vector_m']["motor2"]
-        u2 = Vector(x, y)
+        u2 = (x, y)
         
         print("u0: " + str(u0))
         print("u1: " + str(u1))
@@ -171,10 +168,13 @@ class BasicPIDController:
                 # Wait for latest ball position from camera
                 coords = self.position_queue.get(timeout=0.1)
 
-                print(f"coords: {coords.dot(u0)}, {coords.dot(u1)}, {coords.dot(u2)}")
-                m0_dist = (coords.dot(u0) - self.setpoint)
-                m1_dist = (coords.dot(u1) - self.setpoint)
-                m2_dist = (coords.dot(u2) - self.setpoint)
+                x, y = coords
+
+                m0_dist = (x * u0[0] + y * u0[1] - self.setpoint)
+                m1_dist = (x * u1[0] + y * u1[1] - self.setpoint)
+                m2_dist = (x * u2[0] + y * u2[1] - self.setpoint)
+
+                print(f"coords: {m0_dist}, {m1_dist}, {m2_dist}")
 
                 # Compute control output using PID
                 control_output = 0
