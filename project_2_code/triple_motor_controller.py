@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 import json
 import serial
-print(serial.__file__)
 import time
 import tkinter as tk
 from tkinter import ttk
@@ -50,7 +49,7 @@ class BasicPIDController:
         self.running = False    # Main run flag for clean shutdown
 
         self.curr_motor = None # 0 1 2
-        self.error_multiplier = 25
+        self.error_multiplier = 100
 
     def connect_servo(self):
         """Try to open serial connection to servo, return True if success."""
@@ -209,7 +208,7 @@ class BasicPIDController:
         # Kp slider
         ttk.Label(self.root, text="Kp (Proportional)", font=("Arial", 12)).pack()
         self.kp_var = tk.DoubleVar(value=self.Kp)
-        kp_slider = ttk.Scale(self.root, from_=0, to=50, variable=self.kp_var,
+        kp_slider = ttk.Scale(self.root, from_=0, to=10, variable=self.kp_var,
                               orient=tk.HORIZONTAL, length=500)
         kp_slider.pack(pady=5)
         self.kp_label = ttk.Label(self.root, text=f"Kp: {self.Kp:.1f}", font=("Arial", 11))
@@ -218,7 +217,7 @@ class BasicPIDController:
         # Ki slider
         ttk.Label(self.root, text="Ki (Integral)", font=("Arial", 12)).pack()
         self.ki_var = tk.DoubleVar(value=self.Ki)
-        ki_slider = ttk.Scale(self.root, from_=0, to=5, variable=self.ki_var,
+        ki_slider = ttk.Scale(self.root, from_=0, to=10, variable=self.ki_var,
                               orient=tk.HORIZONTAL, length=500)
         ki_slider.pack(pady=5)
         self.ki_label = ttk.Label(self.root, text=f"Ki: {self.Ki:.1f}", font=("Arial", 11))
