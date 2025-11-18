@@ -189,12 +189,12 @@ class BasicPIDController:
 
     def create_gui(self):
         # """Build Tkinter GUI with large sliders and labeled controls."""
-        # self.root = tk.Tk()
-        # self.root.title("Basic PID Controller")
-        # self.root.geometry("520x400")
+        self.root = tk.Tk()
+        self.root.title("Basic PID Controller")
+        self.root.geometry("520x400")
 
-        # # Title label
-        # ttk.Label(self.root, text="PID Gains", font=("Arial", 18, "bold")).pack(pady=10)
+        # Title label
+        ttk.Label(self.root, text="PID Gains", font=("Arial", 18, "bold")).pack(pady=10)
 
         # # Kp slider
         # ttk.Label(self.root, text="Kp (Proportional)", font=("Arial", 12)).pack()
