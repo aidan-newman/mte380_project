@@ -49,7 +49,7 @@ class BasicPIDController:
         self.running = False    # Main run flag for clean shutdown
 
         self.curr_motor = None # 0 1 2
-        self.error_multiplier = 100
+        self.error_multiplier = 25
 
     def connect_servo(self):
         """Try to open serial connection to servo, return True if success."""
@@ -168,7 +168,7 @@ class BasicPIDController:
                 dists = []
                 for i in range(3):
 
-                    dists.append(coords[0]*u_vecs[i][0]+coords[1]*u_vecs[i][1])
+                    dists.append(coords[0]*u_vecs[i][0]-self.setpoint_x + coords[1]*u_vecs[i][1]-self.setpoint_y)
 
                 # Compute control output using PID
                 control_outputs = self.update_pid(dists)
@@ -232,17 +232,30 @@ class BasicPIDController:
         self.kd_label = ttk.Label(self.root, text=f"Kd: {self.Kd:.1f}", font=("Arial", 11))
         self.kd_label.pack()
 
-        # Setpoint slider
-        ttk.Label(self.root, text="Setpoint (meters)", font=("Arial", 12)).pack()
+        # Setpoint slider x
+        ttk.Label(self.root, text="Setpoint (meters x)", font=("Arial", 12)).pack()
         pos_min = self.config['calibration']['position_min_m']
         pos_max = self.config['calibration']['position_max_m']
-        self.setpoint_var = tk.DoubleVar(value=self.setpoint)
+        self.setpoint_var_x = tk.DoubleVar(value=self.setpoint)
         setpoint_slider = ttk.Scale(self.root, from_=pos_min, to=pos_max,
                                    variable=self.setpoint_var,
                                    orient=tk.HORIZONTAL, length=500)
         setpoint_slider.pack(pady=5)
-        self.setpoint_label = ttk.Label(self.root, text=f"Setpoint: {self.setpoint:.3f}m", font=("Arial", 11))
-        self.setpoint_label.pack()
+        self.setpoint_label_x = ttk.Label(self.root, text=f"Setpoint: {self.setpoint:.3f}m", font=("Arial", 11))
+        self.setpoint_label_x.pack()
+
+        # Setpoint slider y
+        ttk.Label(self.root, text="Setpoint (meters y)", font=("Arial", 12)).pack()
+        pos_min = self.config['calibration']['position_min_m']
+        pos_max = self.config['calibration']['position_max_m']
+        self.setpoint_var_y = tk.DoubleVar(value=self.setpoint)
+        setpoint_slider = ttk.Scale(self.root, from_=pos_min, to=pos_max,
+                                   variable=self.setpoint_var,
+                                   orient=tk.HORIZONTAL, length=500)
+        setpoint_slider.pack(pady=5)
+        self.setpoint_label_y = ttk.Label(self.root, text=f"Setpoint: {self.setpoint:.3f}m", font=("Arial", 11))
+        self.setpoint_label_y.pack()
+
 
         # Button group for actions
         button_frame = ttk.Frame(self.root)
@@ -269,13 +282,14 @@ class BasicPIDController:
             self.Kis = [self.Ki, self.Ki, self.Ki]
             self.Kds = [self.Kd, self.Kd, self.Kd]
 
-            self.setpoint = self.setpoint_var.get()
+            self.setpoint_x = self.setpoint_var_x.get()
+            self.setpoint_y = self.setpoint_var_y.get()
             # Update displayed values
             self.kp_label.config(text=f"Kp: {self.Kp:.1f}")
             self.ki_label.config(text=f"Ki: {self.Ki:.1f}")
             self.kd_label.config(text=f"Kd: {self.Kd:.1f}")
-            self.setpoint_label.config(text=f"Setpoint: {self.setpoint:.3f}m")
-            # Call again after 50 ms (if not stopped)
+            self.setpoint_label_x.config(text=f"Setpoint: {self.setpoint_x:.3f}m")
+            self.setpoint_label_y.config(text=f"Setpoint: {self.setpoint_x:.3f}m")
             # Call again after 50 ms (if not stopped)
             self.root.after(50, self.update_gui)
 
