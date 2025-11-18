@@ -236,9 +236,9 @@ class BasicPIDController:
         ttk.Label(self.root, text="Setpoint (meters x)", font=("Arial", 12)).pack()
         pos_min = self.config['calibration']['position_min_m']
         pos_max = self.config['calibration']['position_max_m']
-        self.setpoint_var_x = tk.DoubleVar(value=self.setpoint)
+        self.setpoint_var_x = tk.DoubleVar(value=self.setpoint_x)
         setpoint_slider = ttk.Scale(self.root, from_=pos_min, to=pos_max,
-                                   variable=self.setpoint_var,
+                                   variable=self.setpoint_var_x,
                                    orient=tk.HORIZONTAL, length=500)
         setpoint_slider.pack(pady=5)
         self.setpoint_label_x = ttk.Label(self.root, text=f"Setpoint: {self.setpoint:.3f}m", font=("Arial", 11))
@@ -248,9 +248,9 @@ class BasicPIDController:
         ttk.Label(self.root, text="Setpoint (meters y)", font=("Arial", 12)).pack()
         pos_min = self.config['calibration']['position_min_m']
         pos_max = self.config['calibration']['position_max_m']
-        self.setpoint_var_y = tk.DoubleVar(value=self.setpoint)
+        self.setpoint_var_y = tk.DoubleVar(value=self.setpoint_y)
         setpoint_slider = ttk.Scale(self.root, from_=pos_min, to=pos_max,
-                                   variable=self.setpoint_var,
+                                   variable=self.setpoint_var_y,
                                    orient=tk.HORIZONTAL, length=500)
         setpoint_slider.pack(pady=5)
         self.setpoint_label_y = ttk.Label(self.root, text=f"Setpoint: {self.setpoint:.3f}m", font=("Arial", 11))
