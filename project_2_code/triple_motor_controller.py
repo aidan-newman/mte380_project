@@ -19,7 +19,12 @@ class BasicPIDController:
         # Load experiment and hardware config from JSON file
         with open(config_file, 'r') as f:
             self.config = json.load(f)
-        # PID gains (controlled by sliders in GUI)
+        # PID gains for sliders
+        self.Kp = 2.0
+        self.Ki = 1.5
+        self.Kd = 1.0
+        
+        # PID gains
         self.Kps = [2.0, 2.0, 2.0]
         self.Kis = [1.5, 1.5, 1.5]
         self.Kds = [1.0, 1.0, 1.0]
@@ -196,6 +201,37 @@ class BasicPIDController:
         # Title label
         ttk.Label(self.root, text="PID Gains", font=("Arial", 18, "bold")).pack(pady=10)
 
+        
+        # Title label
+        ttk.Label(self.root, text="PID Gains", font=("Arial", 18, "bold")).pack(pady=10)
+
+        # Kp slider
+        ttk.Label(self.root, text="Kp (Proportional)", font=("Arial", 12)).pack()
+        self.kp_var = tk.DoubleVar(value=self.Kp)
+        kp_slider = ttk.Scale(self.root, from_=0, to=50, variable=self.kp_var,
+                              orient=tk.HORIZONTAL, length=500)
+        kp_slider.pack(pady=5)
+        self.kp_label = ttk.Label(self.root, text=f"Kp: {self.Kp:.1f}", font=("Arial", 11))
+        self.kp_label.pack()
+
+        # Ki slider
+        ttk.Label(self.root, text="Ki (Integral)", font=("Arial", 12)).pack()
+        self.ki_var = tk.DoubleVar(value=self.Ki)
+        ki_slider = ttk.Scale(self.root, from_=0, to=5, variable=self.ki_var,
+                              orient=tk.HORIZONTAL, length=500)
+        ki_slider.pack(pady=5)
+        self.ki_label = ttk.Label(self.root, text=f"Ki: {self.Ki:.1f}", font=("Arial", 11))
+        self.ki_label.pack()
+
+        # Kd slider
+        ttk.Label(self.root, text="Kd (Derivative)", font=("Arial", 12)).pack()
+        self.kd_var = tk.DoubleVar(value=self.Kd)
+        kd_slider = ttk.Scale(self.root, from_=0, to=10, variable=self.kd_var,
+                              orient=tk.HORIZONTAL, length=500)
+        kd_slider.pack(pady=5)
+        self.kd_label = ttk.Label(self.root, text=f"Kd: {self.Kd:.1f}", font=("Arial", 11))
+        self.kd_label.pack()
+
         # Setpoint slider
         ttk.Label(self.root, text="Setpoint (meters)", font=("Arial", 12)).pack()
         pos_min = self.config['calibration']['position_min_m']
@@ -224,11 +260,22 @@ class BasicPIDController:
     def update_gui(self):
         """Reflect latest values from sliders into program and update display."""
         if self.running:
+            # PID parameters
+            self.Kp = self.kp_var.get()
+            self.Ki = self.ki_var.get()
+            self.Kd = self.kd_var.get()
+
+            self.Kps = [self.Kp, self.Kp, self.Kp]
+            self.Kis = [self.Ki, self.Ki, self.Ki]
+            self.Kds = [self.Kd, self.Kd, self.Kd]
 
             self.setpoint = self.setpoint_var.get()
             # Update displayed values
-
+            self.kp_label.config(text=f"Kp: {self.Kp:.1f}")
+            self.ki_label.config(text=f"Ki: {self.Ki:.1f}")
+            self.kd_label.config(text=f"Kd: {self.Kd:.1f}")
             self.setpoint_label.config(text=f"Setpoint: {self.setpoint:.3f}m")
+            # Call again after 50 ms (if not stopped)
             # Call again after 50 ms (if not stopped)
             self.root.after(50, self.update_gui)
 
