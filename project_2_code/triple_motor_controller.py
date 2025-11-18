@@ -162,7 +162,8 @@ class BasicPIDController:
 
                 dists = []
                 for i in range(3):
-                    dists.append(coords[i][0]*u_vecs[i][0]+coords[i][1]*u_vecs[i][1])
+
+                    dists.append(coords[0]*u_vecs[i][0]+coords[1]*u_vecs[i][1])
 
                 # Compute control output using PID
                 control_outputs = self.update_pid(dists)
