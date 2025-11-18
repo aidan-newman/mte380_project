@@ -240,9 +240,9 @@ class BasicPIDController:
         self.setpoint_var_x = tk.DoubleVar(value=self.setpoint_x)
         setpoint_slider_x = ttk.Scale(self.root, from_=pos_min, to=pos_max,
                                    variable=self.setpoint_var_x,
-                                   orient=tk.HORIZONTAL, length=500)
+                                   orient=tk.HORIZxONTAL, length=500)
         setpoint_slider_x.pack(pady=5)
-        self.setpoint_label_x = ttk.Label(self.root, text=f"Setpoint: {self.setpoint_x:.3f}m", font=("Arial", 11))
+        self.setpoint_label_x = ttk.Label(self.root, text=f"Setpoint_x: {self.setpoint_x:.3f}m", font=("Arial", 11))
         self.setpoint_label_x.pack()
 
         # Setpoint slider y
@@ -254,7 +254,7 @@ class BasicPIDController:
                                    variable=self.setpoint_var_y,
                                    orient=tk.HORIZONTAL, length=500)
         setpoint_slider_y.pack(pady=5)
-        self.setpoint_label_y = ttk.Label(self.root, text=f"Setpoint: {self.setpoint_y:.3f}m", font=("Arial", 11))
+        self.setpoint_label_y = ttk.Label(self.root, text=f"Setpoint_y: {self.setpoint_y:.3f}m", font=("Arial", 11))
         self.setpoint_label_y.pack()
 
 
