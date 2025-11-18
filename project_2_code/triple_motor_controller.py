@@ -9,7 +9,6 @@ from tkinter import ttk
 import matplotlib.pyplot as plt
 from threading import Thread
 import queue
-from vector import Vector
 from ball_detection import BallDetector
 
 class BasicPIDController:
@@ -21,9 +20,9 @@ class BasicPIDController:
         with open(config_file, 'r') as f:
             self.config = json.load(f)
         # PID gains (controlled by sliders in GUI)
-        self.Kp = 2.0
-        self.Ki = 1.5
-        self.Kd = 1.0
+        self.Kp = [2.0, 2.0, 2.0]
+        self.Ki = [1.5, 1.5, 1.5]
+        self.Kd = [1.0, 1.0, 1.0]
         # Scale factor for converting from pixels to meters
         self.scale_factor = self.config['calibration']['pixel_to_meter_ratio'] * self.config['camera']['frame_width'] / 2
         # Servo port name and center angle
@@ -32,8 +31,8 @@ class BasicPIDController:
         self.servo = None
         # Controller-internal state
         self.setpoint = 0.0
-        self.integral = 0.0
-        self.prev_error = 0.0
+        self.integrals = [0.0, 0.0, 0.0]
+        self.prev_errors = [0.0, 0.0, 0.0]
         # Data logs for plotting results
         self.time_log = []
         self.position_log = []
@@ -59,7 +58,7 @@ class BasicPIDController:
             return False
 
 
-    def send_servo_angle(self, angle):
+    def send_servo_angles(self, angles):
         """Send angle command to servo motor (clipped for safety)."""
         if not self.servo:
             return
@@ -75,43 +74,41 @@ class BasicPIDController:
     
         self._last_servo_write = now
         
-        match self.curr_motor.get():
-            case 0:
-                angle_data = str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "\n"
-            case 1:
-                angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "," + str(int(self.neutral_angle)) + "\n"
-            case 2:
-                angle_data = str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle)) + "," + str(int(self.neutral_angle - angle)) + "\n"
-            case _:
-                print("ERROR: Invalid motor value")
-
+        angle_data = (  str(int(self.neutral_angle - angles[0])) + ","
+                      + str(int(self.neutral_angle - angles[1])) + ","
+                      + str(int(self.neutral_angle - angles[2])) + "\n")
+        
         try:
             self.servo.write(bytes(angle_data, 'utf-8'))
             print(f"[SERVO] Sent angles: {angle_data}")
         except Exception as e:
             print(f"[SERVO] Send failed: {e}")
 
-    def update_pid(self, error, dt=0.033):
+    def update_pid(self, errors, dt=0.033):
 
         """Perform PID calculation and return control output."""
-        error *= self.error_multiplier
-        print("Error Value: " + str(error))
 
-        # Proportional term
-        P = self.Kp * error
-        # Integral term accumulation
-        self.integral += error * dt
-        # Limit integral term
-        self.integral = np.clip(self.integral, -10, 10)
-        I = self.Ki * self.integral
-        # Derivative term calculation
-        derivative = (error - self.prev_error) / dt
-        D = self.Kd * derivative
-        self.prev_error = error
-        # PID output (limit to safe beam range)
-        output = P + I + D
-        output = np.clip(output, -20, 20)
-        return output
+        outputs = []
+
+        for i, error in enumerate(errors):
+            error *= self.error_multiplier
+
+            # Proportional term
+            P = self.Kp[i] * error
+            # Integral term accumulation
+            self.integrals[i] += error * dt
+            # Limit integral term
+            self.integrals[i] = np.clip(self.integral, -10, 10)
+            I = self.Ki[i] * self.integral
+            # Derivative term calculation
+            derivative = (error - self.prev_errors[i]) / dt
+            D = self.Kd[i] * derivative
+            self.prev_errors[i] = error
+            # PID output (limit to safe beam range)
+            output = P + I + D
+            output = np.clip(output, -20, 20)
+            outputs.append(output)
+        return outputs
 
     def camera_thread(self):
         self.ball_detector = BallDetector()
@@ -127,8 +124,6 @@ class BasicPIDController:
             # Detect ball position in frame
             found, ball_center, ball_radius, coords = self.ball_detector.detect_ball(frame)
             vis_frame = self.ball_detector.draw_detection(frame)
-            x, y = coords
-            vec = Vector(x, y)
 
             # print("[CAMERA] Ball detected at: " + str(vec))
 
@@ -137,7 +132,7 @@ class BasicPIDController:
                 try:
                     if self.position_queue.full():
                         self.position_queue.get_nowait()
-                    self.position_queue.put_nowait(vec)
+                    self.position_queue.put_nowait(coords)
                 except Exception:
                     pass
             # Show processed video with overlays
@@ -154,48 +149,33 @@ class BasicPIDController:
         if not self.connect_servo():
             print("[ERROR] No servo - running in simulation mode")
         
-        x, y = self.config['motor']['unit_vector_m']["motor0"]
-        u0 = Vector(x, y)
-        x, y = self.config['motor']['unit_vector_m']["motor1"]
-        u1 = Vector(x, y)
-        x, y = self.config['motor']['unit_vector_m']["motor2"]
-        u2 = Vector(x, y)
-        
-        print("u0: " + str(u0))
-        print("u1: " + str(u1))
-        print("u2: " + str(u2))
+        u_vecs = []
 
+        u_vecs.append(self.config['motor']['unit_vector_m']["motor0"])
+        u_vecs.append(self.config['motor']['unit_vector_m']["motor1"])
+        u_vecs.append(self.config['motor']['unit_vector_m']["motor2"])
+        
         self.start_time = time.time()
         while self.running:
             try:
                 # Wait for latest ball position from camera
                 coords = self.position_queue.get(timeout=0.1)
 
-                print(f"coords: {coords.dot(u0)}, {coords.dot(u1)}, {coords.dot(u2)}")
-                m0_dist = (coords.dot(u0) - self.setpoint)
-                m1_dist = (coords.dot(u1) - self.setpoint)
-                m2_dist = (coords.dot(u2) - self.setpoint)
+                dists = []
+                for i in range(3):
+                    dists.append(coords[i][0]*u_vecs[i][0]+coords[i][1]*u_vecs[i][1])
 
                 # Compute control output using PID
-                control_output = 0
-                match self.curr_motor.get():
-                    case 0:
-                        control_output = self.update_pid(m0_dist)
-                    case 1:
-                        control_output = self.update_pid(m1_dist)
-                    case 2:
-                        control_output = self.update_pid(m2_dist)
-                    case _:
-                        print("ERROR: Invalid motor value")
+                control_outputs = self.update_pid(dists)
 
                 # Send control command to servo (real or simulated)
-                self.send_servo_angle(control_output)
+                self.send_servo_angles(control_outputs)
 
                 # Log results for plotting
                 current_time = time.time() - self.start_time
                 self.time_log.append(current_time)
                 self.setpoint_log.append(self.setpoint)
-                self.control_log.append(control_output)
+                self.control_log.append(control_outputs)
             except queue.Empty:
                 continue
             except Exception as e:
@@ -204,44 +184,44 @@ class BasicPIDController:
 
         if self.servo:
             # Return to neutral on exit
-            self.send_servo_angle(0)
+            self.send_servo_angles(0)
             self.servo.close()
 
     def create_gui(self):
-        """Build Tkinter GUI with large sliders and labeled controls."""
-        self.root = tk.Tk()
-        self.root.title("Basic PID Controller")
-        self.root.geometry("520x400")
+        # """Build Tkinter GUI with large sliders and labeled controls."""
+        # self.root = tk.Tk()
+        # self.root.title("Basic PID Controller")
+        # self.root.geometry("520x400")
 
-        # Title label
-        ttk.Label(self.root, text="PID Gains", font=("Arial", 18, "bold")).pack(pady=10)
+        # # Title label
+        # ttk.Label(self.root, text="PID Gains", font=("Arial", 18, "bold")).pack(pady=10)
 
-        # Kp slider
-        ttk.Label(self.root, text="Kp (Proportional)", font=("Arial", 12)).pack()
-        self.kp_var = tk.DoubleVar(value=self.Kp)
-        kp_slider = ttk.Scale(self.root, from_=0, to=50, variable=self.kp_var,
-                              orient=tk.HORIZONTAL, length=500)
-        kp_slider.pack(pady=5)
-        self.kp_label = ttk.Label(self.root, text=f"Kp: {self.Kp:.1f}", font=("Arial", 11))
-        self.kp_label.pack()
+        # # Kp slider
+        # ttk.Label(self.root, text="Kp (Proportional)", font=("Arial", 12)).pack()
+        # self.kp_var = tk.DoubleVar(value=self.Kp)
+        # kp_slider = ttk.Scale(self.root, from_=0, to=50, variable=self.kp_var,
+        #                       orient=tk.HORIZONTAL, length=500)
+        # kp_slider.pack(pady=5)
+        # self.kp_label = ttk.Label(self.root, text=f"Kp: {self.Kp:.1f}", font=("Arial", 11))
+        # self.kp_label.pack()
 
-        # Ki slider
-        ttk.Label(self.root, text="Ki (Integral)", font=("Arial", 12)).pack()
-        self.ki_var = tk.DoubleVar(value=self.Ki)
-        ki_slider = ttk.Scale(self.root, from_=0, to=5, variable=self.ki_var,
-                              orient=tk.HORIZONTAL, length=500)
-        ki_slider.pack(pady=5)
-        self.ki_label = ttk.Label(self.root, text=f"Ki: {self.Ki:.1f}", font=("Arial", 11))
-        self.ki_label.pack()
+        # # Ki slider
+        # ttk.Label(self.root, text="Ki (Integral)", font=("Arial", 12)).pack()
+        # self.ki_var = tk.DoubleVar(value=self.Ki)
+        # ki_slider = ttk.Scale(self.root, from_=0, to=5, variable=self.ki_var,
+        #                       orient=tk.HORIZONTAL, length=500)
+        # ki_slider.pack(pady=5)
+        # self.ki_label = ttk.Label(self.root, text=f"Ki: {self.Ki:.1f}", font=("Arial", 11))
+        # self.ki_label.pack()
 
-        # Kd slider
-        ttk.Label(self.root, text="Kd (Derivative)", font=("Arial", 12)).pack()
-        self.kd_var = tk.DoubleVar(value=self.Kd)
-        kd_slider = ttk.Scale(self.root, from_=0, to=10, variable=self.kd_var,
-                              orient=tk.HORIZONTAL, length=500)
-        kd_slider.pack(pady=5)
-        self.kd_label = ttk.Label(self.root, text=f"Kd: {self.Kd:.1f}", font=("Arial", 11))
-        self.kd_label.pack()
+        # # Kd slider
+        # ttk.Label(self.root, text="Kd (Derivative)", font=("Arial", 12)).pack()
+        # self.kd_var = tk.DoubleVar(value=self.Kd)
+        # kd_slider = ttk.Scale(self.root, from_=0, to=10, variable=self.kd_var,
+        #                       orient=tk.HORIZONTAL, length=500)
+        # kd_slider.pack(pady=5)
+        # self.kd_label = ttk.Label(self.root, text=f"Kd: {self.Kd:.1f}", font=("Arial", 11))
+        # self.kd_label.pack()
 
         # Setpoint slider
         ttk.Label(self.root, text="Setpoint (meters)", font=("Arial", 12)).pack()
@@ -278,23 +258,24 @@ class BasicPIDController:
                    command=self.stop).pack(side=tk.LEFT, padx=5)
 
         # Schedule periodic GUI update
-        self.update_gui()
+        # self.update_gui()
 
     def update_gui(self):
         """Reflect latest values from sliders into program and update display."""
         if self.running:
-            # PID parameters
-            self.Kp = self.kp_var.get()
-            self.Ki = self.ki_var.get()
-            self.Kd = self.kd_var.get()
-            self.setpoint = self.setpoint_var.get()
-            # Update displayed values
-            self.kp_label.config(text=f"Kp: {self.Kp:.1f}")
-            self.ki_label.config(text=f"Ki: {self.Ki:.1f}")
-            self.kd_label.config(text=f"Kd: {self.Kd:.1f}")
-            self.setpoint_label.config(text=f"Setpoint: {self.setpoint:.3f}m")
-            # Call again after 50 ms (if not stopped)
-            self.root.after(50, self.update_gui)
+            pass
+            # # PID parameters
+            # self.Kp = self.kp_var.get()
+            # self.Ki = self.ki_var.get()
+            # self.Kd = self.kd_var.get()
+            # self.setpoint = self.setpoint_var.get()
+            # # Update displayed values
+            # self.kp_label.config(text=f"Kp: {self.Kp:.1f}")
+            # self.ki_label.config(text=f"Ki: {self.Ki:.1f}")
+            # self.kd_label.config(text=f"Kd: {self.Kd:.1f}")
+            # self.setpoint_label.config(text=f"Setpoint: {self.setpoint:.3f}m")
+            # # Call again after 50 ms (if not stopped)
+            # self.root.after(50, self.update_gui)
 
     def reset_integral(self):
         """Clear integral error in PID (button handler)."""
@@ -349,7 +330,7 @@ class BasicPIDController:
         ctrl_thread.start()
 
         # Build and run GUI in main thread
-        self.create_gui()
+        # self.create_gui()
         self.root.mainloop()
 
         # After GUI ends, stop everything
