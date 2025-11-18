@@ -238,10 +238,10 @@ class BasicPIDController:
         pos_min = self.config['calibration']['position_min_m']
         pos_max = self.config['calibration']['position_max_m']
         self.setpoint_var_x = tk.DoubleVar(value=self.setpoint_x)
-        setpoint_slider = ttk.Scale(self.root, from_=pos_min, to=pos_max,
+        setpoint_slider_x = ttk.Scale(self.root, from_=pos_min, to=pos_max,
                                    variable=self.setpoint_var_x,
                                    orient=tk.HORIZONTAL, length=500)
-        setpoint_slider.pack(pady=5)
+        setpoint_slider_x.pack(pady=5)
         self.setpoint_label_x = ttk.Label(self.root, text=f"Setpoint: {self.setpoint_x:.3f}m", font=("Arial", 11))
         self.setpoint_label_x.pack()
 
@@ -250,10 +250,10 @@ class BasicPIDController:
         pos_min = self.config['calibration']['position_min_m']
         pos_max = self.config['calibration']['position_max_m']
         self.setpoint_var_y = tk.DoubleVar(value=self.setpoint_y)
-        setpoint_slider = ttk.Scale(self.root, from_=pos_min, to=pos_max,
+        setpoint_slider_y = ttk.Scale(self.root, from_=pos_min, to=pos_max,
                                    variable=self.setpoint_var_y,
                                    orient=tk.HORIZONTAL, length=500)
-        setpoint_slider.pack(pady=5)
+        setpoint_slider_y.pack(pady=5)
         self.setpoint_label_y = ttk.Label(self.root, text=f"Setpoint: {self.setpoint_y:.3f}m", font=("Arial", 11))
         self.setpoint_label_y.pack()
 
@@ -289,8 +289,8 @@ class BasicPIDController:
             self.kp_label.config(text=f"Kp: {self.Kp:.1f}")
             self.ki_label.config(text=f"Ki: {self.Ki:.1f}")
             self.kd_label.config(text=f"Kd: {self.Kd:.1f}")
-            self.setpoint_label_x.config(text=f"Setpoint: {self.setpoint_x:.3f}m")
-            self.setpoint_label_y.config(text=f"Setpoint: {self.setpoint_x:.3f}m")
+            self.setpoint_label_x.config(text=f"Setpoint_x: {self.setpoint_x:.3f}m")
+            self.setpoint_label_y.config(text=f"Setpoint_y: {self.setpoint_y:.3f}m")
             # Call again after 50 ms (if not stopped)
             self.root.after(50, self.update_gui)
 
