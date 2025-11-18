@@ -183,7 +183,7 @@ class BasicPIDController:
 
         if self.servo:
             # Return to neutral on exit
-            self.send_servo_angles(0)
+            self.send_servo_angles((0,0,0))
             self.servo.close()
 
     def create_gui(self):
