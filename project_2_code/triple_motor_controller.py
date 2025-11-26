@@ -1,3 +1,5 @@
+from datetime import datetime
+import math
 import cv2
 import numpy as np
 import json
@@ -9,9 +11,181 @@ import matplotlib.pyplot as plt
 from threading import Thread
 import queue
 from ball_detection import BallDetector
+from pupil_apriltags import Detector
 
 class BasicPIDController:
+    def update_config(self, calibration_data, file_path='config.json'):
+        with open(file_path, "r") as f:
+            config = json.load(f)
+
+        for key, value in calibration_data.items():
+            if key in config:
+                if isinstance(config[key], dict) and isinstance(value, dict):
+                    config[key].update(value)
+                else:
+                    config[key] = value
+            else:
+                config[key] = value
+
+        with open(file_path, "w") as f:
+            json.dump(config, f, indent=4)
+
+    def get_motor_unit_vectors(self):
+        """Compute unit vectors from circle center to motor points in meters."""
+        if self.circle_center is None or self.pixel_to_meter_ratio is None:
+            return None
+
+        unit_vectors = []
+        cx, cy = self.circle_center
+
+        for (mx, my) in self.motor_points:
+            dx_pixels = mx - cx
+            dy_pixels = cy - my # Invert y-axis
+
+            # Convert to meters
+            dx_m = dx_pixels * self.pixel_to_meter_ratio
+            dy_m = dy_pixels * self.pixel_to_meter_ratio
+
+            norm = math.sqrt(dx_m**2 + dy_m**2)
+            unit_vector = (dx_m / norm, dy_m / norm)
+
+            unit_vectors.append(unit_vector)
+
+        return unit_vectors
+
+
+    def auto_cal(self):
+        self.detector = Detector(families="tag36h11", nthreads=1, quad_decimate=1.0, refine_edges=1)
+        self.tag_map = {"center": 0, "motors": [3,5,8]}
+
+        print("\n=== APRILTAG CALIBRATION START ===")
+        print("Show tags 0(center), 3/5/8(motors). Press 's' to continue.\n")
+
+        while True:
+            ret, frame = self.cap.read()
+            if not ret: 
+                print("Camera error."); return False
+
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            tags = self.detector.detect(gray)
+
+            self.tag_centers = {}; self.tag_top_centers = {}
+
+            for tag in tags:
+                tx, ty = tag.center
+                bl, br, tr, tl = tag.corners
+                top_x = int((tl[0]+tr[0])/2)
+                top_y = int((tl[1]+tr[1])/2)
+
+                # store points
+                self.tag_centers[tag.tag_id] = (int(tx),int(ty))
+                self.tag_top_centers[tag.tag_id] = (top_x,top_y)
+
+                if hasattr(self, "pixel_to_meter_ratio") and self.pixel_to_meter_ratio is not None:
+                    cx, cy = self.circle_center
+                    dx = (tx - cx) * self.pixel_to_meter_ratio
+                    dy = (cy - ty) * self.pixel_to_meter_ratio   # invert y-axis
+                    meter_text = f"{dx:.3f}m , {dy:.3f}m"
+                else:
+                    meter_text = ""
+
+                # -------------- Draw on screen ------------------
+                cv2.circle(frame,(int(tx),int(ty)),6,(0,0,0),-1)
+                cv2.putText(frame, f"ID {tag.tag_id}", (int(tx+10), int(ty-10)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,0,255), 2)
+
+                cv2.putText(frame, meter_text, (int(tx+10), int(ty+15)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0,0,255), 2)
+
+            # If all 3 motor tags + center found → compute values
+            if (self.tag_map["center"] in self.tag_centers and
+                all(t in self.tag_top_centers for t in self.tag_map["motors"])):
+
+                self.circle_center = self.tag_centers[self.tag_map["center"]]
+                self.motor_points  = [ self.tag_top_centers[t] for t in self.tag_map["motors"] ]
+
+                # convert radius + unit vectors
+                cx,cy = self.circle_center
+                mx,my = self.motor_points[0]
+                r = math.dist((mx,my),(cx,cy))
+
+                self.circle_radius = r
+                self.pixel_to_meter_ratio = (self.BALANCER_DIAMETER/2) / r
+                self.motor_unit_vectors = self.get_motor_unit_vectors()
+
+                json_data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "balancer_diameter": float(self.BALANCER_DIAMETER),
+                    "camera": {
+                        "index": int(self.CAMERA_INDEX),
+                        "frame_width": int(self.FRAME_WIDTH),
+                        "frame_height": int(self.FRAME_HEIGHT)
+                    },
+                    "calibration": {
+                        "pixel_to_meter_ratio": self.pixel_to_meter_ratio,
+                        "position_min_m": -self.BALANCER_DIAMETER/2,
+                        "position_max_m": self.BALANCER_DIAMETER/2,
+                        "center_x": cx,
+                        "center_y": cy
+                    },
+                    "servo": {
+                        "port": str(self.servo_port),
+                        "neutral_angle": int(self.neutral_angle)
+                    },
+                    "motor": {
+                        "pixels": {
+                            "motor0": [float(x) for x in self.motor_points[0]],
+                            "motor1": [float(x) for x in self.motor_points[1]],
+                            "motor2": [float(x) for x in self.motor_points[2]]        
+                        },
+                        "unit_vector_m": {
+                            "motor0": self.motor_unit_vectors[0],
+                            "motor1": self.motor_unit_vectors[1],
+                            "motor2": self.motor_unit_vectors[2]        
+                        }
+                    }   
+                }
+
+                self.update_config(json_data, 'config.json')
+                cv2.putText(frame,"CALIBRATION OK - PRESS S TO START",(40,40),
+                            cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,0,0),2)
+
+            cv2.imshow("APRILTAG CALIBRATION",frame)
+            
+            key = cv2.waitKey(1)
+            if key == ord('s') and self.pixel_to_meter_ratio is not None:
+                print("\n=== CALIBRATION COMPLETE ===")
+                print(f"Pixel→meter ratio: {self.pixel_to_meter_ratio:.6f}")
+                print(f"Motor unit vectors: {self.motor_unit_vectors}")
+                cv2.destroyAllWindows()
+                return True
+            elif key == 27:  # ESC abort
+                cv2.destroyAllWindows()
+                return False
+
+
+        
+
     def __init__(self, config_file="config.json"):
+        self.servo_port = 'COM3'  # Update as needed
+        self.neutral_angle = 65
+        self.pixel_to_meter_ratio = None
+        self.circle_center = None
+        self.circle_radius = None
+        self.BALANCER_DIAMETER = 0.3
+        self.CAMERA_INDEX = 0 # Default camera index
+        self.FRAME_WIDTH = 640 # Default frame width
+        self.FRAME_HEIGHT = 480 # Default frame height
+        self.cap = cv2.VideoCapture(self.CAMERA_INDEX, cv2.CAP_DSHOW)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.FRAME_WIDTH)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.FRAME_HEIGHT)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize latency
+
+
+        if not self.auto_cal():
+            print("[APRILTAG] Auto-calibration failed. Ensure all AprilTags are visible to the camera.")
+            raise Exception("[APRILTAG] Auto-calibration failed. Ensure all AprilTags are visible to the camera.")
+        
 
 
         """Initialize controller, load config, set defaults and queues."""
@@ -19,20 +193,23 @@ class BasicPIDController:
         with open(config_file, 'r') as f:
             self.config = json.load(f)
         # PID gains for sliders
-        self.Kp = 2.0
-        self.Ki = 1.5
-        self.Kd = 1.0
+        self.Kp = 0.75
+        self.Ki = 0.625
+        self.Kd = 0.675
         
         # PID gains
-        self.Kps = [2.0, 2.0, 2.0]
-        self.Kis = [1.5, 1.5, 1.5]
-        self.Kds = [1.0, 1.0, 1.0]
+        self.Kps = [self.Kp, self.Kp, self.Kp]
+        self.Kis = [self.Ki, self.Ki, self.Ki]
+        self.Kds = [self.Kd, self.Kd, self.Kd]
         # Scale factor for converting from pixels to meters
-        self.scale_factor = self.config['calibration']['pixel_to_meter_ratio'] * self.config['camera']['frame_width'] / 2
+        self.scale_factor = self.pixel_to_meter_ratio * self.FRAME_WIDTH / 2
         # Servo port name and center angle
-        self.servo_port = self.config['servo']['port']
-        self.neutral_angle = self.config['servo']['neutral_angle']
+
+        self.servo_port = 'COM3'  # Update as needed
+        self.neutral_angle = 65
+
         self.servo = None
+        self.error_radius = 0.005  # Deadband radius in meters
         # Controller-internal state
         self.setpoint_x = 0.0
         self.setpoint_y = 0.0
@@ -48,7 +225,6 @@ class BasicPIDController:
         self.position_queue = queue.Queue(maxsize=1)
         self.running = False    # Main run flag for clean shutdown
 
-        self.curr_motor = None # 0 1 2
         self.error_multiplier = 100
 
     def connect_servo(self):
@@ -103,7 +279,8 @@ class BasicPIDController:
             # Integral term accumulation
             self.integrals[i] += error * dt
             # Limit integral term
-            self.integrals[i] = np.clip(self.integrals[i], -10, 10)
+            self.integrals[i] = np.clip(self.integrals[i], -5, 5)
+            print(f"Integral term for motor {i}: {self.integrals[i]}")
             I = self.Kis[i] * self.integrals[i]
             # Derivative term calculation
             derivative = (error - self.prev_errors[i]) / dt
@@ -167,8 +344,9 @@ class BasicPIDController:
 
                 dists = []
                 for i in range(3):
-
-                    dists.append(coords[0]*u_vecs[i][0]-self.setpoint_x + coords[1]*u_vecs[i][1]-self.setpoint_y)
+                    proj_dist = coords[0]*u_vecs[i][0]-self.setpoint_x + coords[1]*u_vecs[i][1]-self.setpoint_y
+                    #if abs(proj_dist) < self.error_radius: proj_dist = 0
+                    dists.append(proj_dist)
 
                 # Compute control output using PID
                 control_outputs = self.update_pid(dists)
@@ -358,5 +536,5 @@ if __name__ == "__main__":
         controller.run()
     except FileNotFoundError:
         print("[ERROR] config.json not found. Run simple_autocal.py first.")
-    except Exception as e:
-        print(f"[ERROR] {e}")
+    # except Exception as e:
+    #     print(f"[ERROR] {e}")
